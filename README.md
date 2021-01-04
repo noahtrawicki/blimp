@@ -4,7 +4,7 @@ Bergmann Lab Isotopic Measurement Pipeline for analysis of D47 data from a Nu Pe
 This repository contains scripts to reduce raw voltage data from a Nu Perspective IRMS, calculate isotopic compositions using Mathieu Daeron's ['D47crunch' library](https://github.com/mdaeron/D47crunch), and create a suite of tables and figures that summarize data.
 
 ## Requirements
-The Anaconda distribution of Python 3 will have all the packages you will need (pandas, numpy, pathlib, matplotlib, os, seaborn **except** [D47crunch](https://github.com/mdaeron/D47crunch) (can be installed with 'pip install D47crunch'), and, optionally, [joypy](https://github.com/sbebo/joypy) ('pip install joypy').
+The Anaconda distribution of Python 3 will have all the packages you will need (pandas, numpy, pathlib, matplotlib, os, and seaborn) **except** [D47crunch](https://github.com/mdaeron/D47crunch) (can be installed with 'pip install D47crunch'), and, optionally, [joypy](https://github.com/sbebo/joypy) ('pip install joypy').
 
 Blimp has been tested on Nu Stable versions 1.69.5, 1.71.2, and 1.71.5. For now, blimp is only reliably usable for data from the Bergmann Lab Nu Perspective IRMS.
 
