@@ -9,10 +9,11 @@ The Anaconda distribution of Python 3 will have all the packages you will need (
 Blimp has been tested on Nu Stable versions 1.69.5, 1.71.2, and 1.71.5. For now, blimp is only reliably usable for data from the Bergmann Lab Nu Perspective IRMS.
 
 ## Using blimp
-1. Copy data folder(s) created by the Nu Perspective software (containing raw data files and batch summary) and paste into the 'raw_data' folder. Ideally, all analyses therein will be associated with the project of interest.
-2. If you would like to change the default parameters (nominal anchor values, analysis removal thresholds, a18O values, etc.), add metadata to your samples (e.g., sample mineralogy), or change the original names of analyses (e.g., 'MySmaple' --> 'MySample'), you should update the corresponding spreadsheet ('params.xlsx'; 'metadata.xlsx'; 'names_to_change.csv').
-3. Navigate to '.../blimp_test/scripts' and run 'blimp_main.py' in Terminal (Mac), Windows Command Prompt (Windows), or Anaconda Command Prompt.
-4. Blimp will take ~20 seconds -- 2 min to run, depending on how many analyses are processed and your machine.
-5. Find processed data in 'results' folder and plots in 'plots' folder.
+1. Download and unzip blimp.
+2. Copy data folder(s) created by the Nu Perspective software (containing raw data files and batch summary) and paste into the 'raw_data' folder. Ideally, all analyses therein will be associated with the project of interest.
+3. If you would like to change the default parameters (nominal anchor values, analysis removal thresholds, a18O values, etc.), add metadata to your samples (e.g., sample mineralogy), or change the original names of analyses (e.g., 'MySmaple' --> 'MySample'), you should update the corresponding spreadsheet ('params.xlsx'; 'metadata.xlsx'; 'names_to_change.csv').
+4. Navigate to '.../blimp_test/scripts' and run 'blimp_main.py' in Terminal (Mac), Windows Command Prompt (Windows), or Anaconda Command Prompt.
+5. Blimp will take ~20 seconds -- 2 min to run, depending on how many analyses are processed and your machine.
+6. Find processed data in 'results' folder and plots in 'plots' folder.
 
 If you want a LATEX file/pdf with a summary of key results and plots, talk to Noah -- you will need to install (at least) pdflatex, Perl, and a LATEX interpreter.
