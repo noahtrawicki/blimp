@@ -3,7 +3,7 @@ import os
 import blimp_supp as b_s
 import pandas as pd
 from pathlib import Path
-import make_pdf as mk_pdf
+#import make_pdf as mk_pdf
 
 output_sep = '--------------'
 
@@ -70,6 +70,6 @@ b_s.plot_ETH_D47(rptability)
 
 b_s.joy_plot()
 b_s.cdv_plots()
-mk_pdf.run_mk_pdf()
+#mk_pdf.run_mk_pdf()
 print(output_sep)
 print('SCRIPT COMPLETE.')
