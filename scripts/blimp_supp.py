@@ -109,11 +109,9 @@ def read_Nu_data(data_file, file_number, current_sample):
 
 	df = df.drop(columns = [0]) # removes first column (full of zeros)
 	df = df.dropna(how = 'any')
+	df = df.astype('float64') # make sure data is read as floats; try moving this up
+	df = df[(df.T != 0).any()] # remove all zeroes; https://stackoverflow.com/questions/22649693/drop-rows-with-all-zeros-in-pandas-data-frame	
 	df = df.reset_index(drop = 'True')
-	df = df.loc[(df[1] != '0.000000E+00') & (df[2] != '0.000000E+00') & (df[3] != '0.000000E+00')] # If values of any row are 0 for first three columns, rmv
-	df = df.reset_index(drop = 'True')
-
-	df = df.astype('float64') # make sure data is read as floats
 
 	df_zero = df.head(6).astype('float64') # first 6 rows are the "Blank" i.e. zero measurement for the whole replicate
 	df_zero_mean = (df_zero.apply(np.mean, axis = 1)).round(21)
