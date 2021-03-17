@@ -250,10 +250,12 @@ def raw_to_D47crunch_fmt(results_file, file_number, current_sample, file_count, 
 	# This goes through batch summary data and checks values against thresholds from params.xlsx
 	for i in os.listdir(this_path):
 		if 'Batch Results.csv' in i and 'fail' not in os.listdir(this_path): # checks for results summary file, doesn't run if one of the samples failed (THIS DOESNT WORK)
-			summ_file = Path.cwd() / 'raw_data' / folder_name / i				
+			summ_file = Path.cwd() / 'raw_data' / folder_name / i
+			#Read in Batch Results file, combine the two rows of column headers into one		
 			df_results_summ = pd.read_csv(summ_file, encoding = 'latin1', skiprows = 3, header = [0,1])
 			df_results_summ.columns = df_results_summ.columns.map('_'.join).str.strip()		
 
+			#Get the index location of the row that corresponds to the given file number (i.e. replicate)
 			curr_row = df_results_summ.loc[df_results_summ['Data_File'].str.contains(str(file_number))].index		
 			
 			transduc_press = float(df_results_summ['Transducer_Pressure'][curr_row])				
@@ -266,6 +268,7 @@ def raw_to_D47crunch_fmt(results_file, file_number, current_sample, file_count, 
 
 			meta_data_list = [file_number, transduc_press, samp_weight, NuCarb_temp, pumpover, init_beam, balance, vial_loc, bad_count]
 
+			# Remove any replicates that fail thresholds, write a message to the terminal
 			if transduc_press < transducer_pressure_thresh:
 				rmv_analyses.append(file_number)
 				rmv_msg.append((str(rmv_analyses[0]) + ' failed transducer pressure requirements (transducer_pressure = ' + str(round(transduc_press,1)) + ')' ))
@@ -275,7 +278,7 @@ def raw_to_D47crunch_fmt(results_file, file_number, current_sample, file_count, 
 			if bad_count > bad_count_thresh:
 				rmv_analyses.append(file_number)
 				rmv_msg.append((str(rmv_analyses[0]) + ' failed cycle-level reproducibility requirements (bad cycles = ' + str(bad_count) + ')'))
-			
+	# If replicate doesn't fail any thresholds, calculate the mean lil delta and return as a list
 	if bad_count < bad_count_thresh and file_number not in rmv_analyses:
 		d45_avg = format(df_results['d45'].mean(), 'f')
 		d46_avg = format(df_results['d46'].mean(), 'f')
@@ -286,12 +289,12 @@ def raw_to_D47crunch_fmt(results_file, file_number, current_sample, file_count, 
 		data_list = [file_number, session, current_sample, d45_avg, d46_avg, d47_avg, d48_avg, d49_avg]
 
 		return data_list, meta_data_list
-	
+	# If replicate fails any threshold, return list with nans for little deltas and add in metadata
 	else: 
 		data_list = [file_number, session, current_sample, np.nan, np.nan, np.nan, np.nan, np.nan]
 		rmv_meta_list.append(meta_data_list)
 		return None, None
-
+	# Counts how many bad replicates in total... not currently used
 	if bad_count >= bad_count_thresh:
 		bad_rep_count +=1
 
@@ -320,7 +323,8 @@ def fix_names(df):
 
 
 def run_D47crunch():
-	
+	# This pulls in Mathieu Daeron's D47crunch package (https://github.com/mdaeron/D47crunch),
+	# passes crunched data to it, and makes output files
 	import D47crunch
 
 	results_path = Path.cwd() / 'results'
@@ -366,7 +370,7 @@ def run_D47crunch():
 	print('Anchors are ', data.Nominal_D47)	
 
 	print(output_sep)
-	for i in rmv_msg: print(i)
+	for i in rmv_msg: print(i) # print replicates that failed threshold
 	print(output_sep)
 
 	df = pd.DataFrame(rmv_meta_list, columns = ['UID', 'Transducer_Pressure', 'Sample_Weight', 'NuCarb_temp', 'Pumpover_Pressure', 'Initial_Sam', 'Balance', 'Vial_Location', 'Bad_count'])
