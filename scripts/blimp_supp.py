@@ -356,7 +356,7 @@ def run_D47crunch():
 	data.table_of_sessions(verbose = True, print_out = True, dir = results_path, filename = 'sessions.csv', save_to_file = True)
 	data.table_of_samples(verbose = True, print_out = True, dir = results_path, save_to_file = True, filename = 'samples.csv')
 	data.table_of_analyses(print_out = False, dir = results_path, save_to_file = True, filename = 'analyses.csv')
-	data.plot_sessions(dir = Path.cwd() / 'plots' / 'session_plots')
+	#data.plot_sessions(dir = Path.cwd() / 'plots' / 'session_plots')
 
 	summ_dict = {'n_sessions':n_sess, 'n_samples':n_samp, 'n_analyses':n_anal,
 	'Nominal_D47_ETH-1':data.Nominal_D47['ETH-1'], 'Nominal_D47_ETH-2':data.Nominal_D47['ETH-2'],
@@ -415,8 +415,12 @@ def add_metadata(dir_path, rptability, batch_data_list):
 
 	if 'Mineralogy' in df.columns:
 		df['d18O_VPDB_mineral'] = round(((df['d18O_VSMOW'] - list(map(thousandlna, df['Mineralogy']))) - 30.92)/1.03092, 1) # convert from CO2 d18O (VSMOW) to mineral d18O (VPDB)
+		df['d18O_water_VSMOW'] = df['d18O_VSMOW'] - eps - list(map(thousandlna, df['Mineralogy'])) # convert from CO2  d18O VSMOW to water d18O VSMOW
+		df['d18O_water_VSMOW'] = round(df['d18O_water_VSMOW'], 1)
 	else:
 		df['d18O_VPDB_mineral'] = round(((df['d18O_VSMOW'] - 1000*np.log(1.00871) - 30.92)/1.03092), 1) # convert from CO2 d18O (VSMOW) to calcite d18O (VPDB) if mineralogy not specified
+		df['d18O_water_VSMOW'] = df['d18O_VSMOW'] - eps - 1000*np.log(1.00871) # convert from CO2  d18O VSMOW to water d18O VSMOW
+		df['d18O_water_VSMOW'] = round(df['d18O_water_VSMOW'], 1)
 
 
 	df.to_csv(Path.cwd() / 'results' / 'summary.csv', index = False)
