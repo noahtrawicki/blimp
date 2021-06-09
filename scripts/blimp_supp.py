@@ -26,10 +26,11 @@ sam_b3_idx = np.linspace(83, 121, 20, dtype = int)
 sam_idx = np.concatenate([sam_b1_idx, sam_b2_idx, sam_b3_idx])
 
 # ---- ASSIGN PLOT DEFAULTS ----
+
 sns.set_palette("colorblind")
 pal = sns.color_palette()
-plt.rcParams['font.sans-serif'] = "Gill Sans MT"
-plt.rcParams["font.family"] = "sans-serif"
+# plt.rcParams['font.sans-serif'] = "Gill Sans MT"
+# plt.rcParams["font.family"] = "sans-serif"
 medium_font = 10
 plt.rc('axes', labelsize=medium_font, labelweight = 'bold')
 plt.rcParams['xtick.direction'] = 'in'
@@ -41,7 +42,7 @@ xls = pd.ExcelFile(Path.cwd().parents[0] / 'params.xlsx')
 df_anc = pd.read_excel(xls, 'Anchors', index_col = 'Anchor')
 df_const = pd.read_excel(xls, 'Constants', index_col = 'Name')
 df_threshold = pd.read_excel(xls, 'Thresholds', index_col = 'Type')
-df_rnm_rmv = pd.read_excel(xls, 'Rename_remove', index_col = 'UID')
+df_rnm_rmv = pd.read_excel(xls, 'Rename_by_UID')
 
 long_term_d47_SD = df_threshold['Value'].loc['long_term_SD']
 num_SD = df_threshold['Value'].loc['num_SD']
@@ -55,7 +56,6 @@ arag_a18O = df_const['Value'].loc['arag_a18O']
 dolo_a18O = df_const['Value'].loc['dolo_a18O']
 
 Nominal_D47 = df_anc.to_dict()['D47'] # Sets anchor values for D47crunch as dictionary {Anchor: value}
-
 # ---- DEFINE FUNCTIONS ----
 
 def calc_bern_temp(D47_value):
@@ -97,12 +97,15 @@ def read_Nu_data(data_file, file_number, current_sample):
 	'''INPUT ---- Nu data file (.txt)
    OUTPUT --- list of mean d45 to d49 (i.e. little delta) values'''
 
-   # Deals with different .txt file formats starting at UID 9628
-	if file_number > 9628: 
+   # Deals with different .txt file formats starting at UID 1899, 9628 (Nu software updates)
+	if file_number > 9628:
 		n_skip = 31
+	elif file_number < 1899:
+		n_skip = 29
 	else:
    		n_skip = 30
-	try:		
+
+	try:	
 		df = pd.read_fwf(data_file, skiprows = n_skip, header = None) # read in file, skip 31 rows, no header
 	except NameError:
 		print('Data file not found for UID', file_number)
@@ -126,7 +129,8 @@ def read_Nu_data(data_file, file_number, current_sample):
 	mass_45_index = np.arange(10, len(df), 6)
 	mass_44_index = np.arange(11, len(df), 6)
 
-	m44 = df_mean[mass_44_index] - df_zero_mean[5] # subtract mass_44 zero measurement from each mass_44 meas
+	 # subtract mass_44 zero measurement from each mass_44 meas
+	m44 = df_mean[mass_44_index] - df_zero_mean[5]
 	m44 = m44.dropna()
 	m44 = m44.reset_index(drop = True)
 
@@ -155,23 +159,27 @@ def read_Nu_data(data_file, file_number, current_sample):
 	m45 = m45.reset_index(drop = True)
 	m45_44 = m45/m44
 
+	# Create a zero-corrected dataframe of little delta values 
 	df_zero_corr = pd.DataFrame({'m44':m44, 'm45_44':m45_44,'m46_44':m46_44, 'm47_44':m47_44, 'm48_44':m48_44, 'm49_44':m49_44})
 	
 	# Calculate little deltas by correcting each sample side measurement to bracketing ref side measurements
 	lil_del = []
 
+	# Gets index locations of samp/ref measurements... not currently in use
 	# samp = df_zero_corr.iloc[sam_idx]
 	# samp = samp.reset_index(drop = True)
 	# ref = df_zero_corr.iloc[ref_idx]
 	# ref = ref.reset_index(drop = True)
 
+	# compare sample measurement to bracketing ref gas measurement
 	for i in df_zero_corr.columns:
-	    for j in sam_idx:
+	    for j in sam_idx: # 'sam_idx' defined near top of script
 	        s = df_zero_corr[i][j]
 	        r_prev =  df_zero_corr[i][j-1]
 	        r_next = df_zero_corr[i][j+1]
 	        lil_del.append(((((s/r_prev) + (s/r_next))/2.)-1)*1000)
 
+	# Define each little delta value by index position
 	d45 = lil_del[60:120]
 	d46 = lil_del[120:180]
 	d47 = lil_del[180:240]
@@ -220,6 +228,7 @@ def read_Nu_data(data_file, file_number, current_sample):
 # 		return df_results
 
 
+
 def raw_to_D47crunch_fmt(results_file, file_number, current_sample, file_count, folder_name):
 	'''INPUT: Nu Data .txt file and associated data
 	   OUTPUT: List of small delta and metadata ready for D47crunch'''
@@ -240,7 +249,6 @@ def raw_to_D47crunch_fmt(results_file, file_number, current_sample, file_count, 
 
 			bad_count += 1
 
-	#session = 'Session' + str(file_count) # Use this line to make session = run
 	session = str(folder_name[:8])
 	
 	rmv_analyses = [] # analysis to be removed
@@ -251,33 +259,37 @@ def raw_to_D47crunch_fmt(results_file, file_number, current_sample, file_count, 
 	for i in os.listdir(this_path):
 		if 'Batch Results.csv' in i and 'fail' not in os.listdir(this_path): # checks for results summary file, doesn't run if one of the samples failed (THIS DOESNT WORK)
 			summ_file = Path.cwd() / 'raw_data' / folder_name / i
-			#Read in Batch Results file, combine the two rows of column headers into one		
 			df_results_summ = pd.read_csv(summ_file, encoding = 'latin1', skiprows = 3, header = [0,1])
 			df_results_summ.columns = df_results_summ.columns.map('_'.join).str.strip()		
 
 			#Get the index location of the row that corresponds to the given file number (i.e. replicate)
 			curr_row = df_results_summ.loc[df_results_summ['Data_File'].str.contains(str(file_number))].index		
-			
-			transduc_press = float(df_results_summ['Transducer_Pressure'][curr_row])				
-			samp_weight = float(df_results_summ['Sample_Weight'][curr_row])
-			NuCarb_temp = float(df_results_summ['Ave_Temperature'][curr_row])
-			pumpover = float(df_results_summ['MaxPumpOverPressure_'][curr_row])
-			init_beam = float(df_results_summ['Initial_Sam Beam'][curr_row])
-			balance = float(df_results_summ['Balance_%'][curr_row])
-			vial_loc = float(df_results_summ['Vial_Location'][curr_row])
+			if len(curr_row) == 1: # curr_row is Int64Index, which acts like a list. If prev line finds either 0 or 2 matching lines, it will skip this section.
+				
+				transduc_press = float(df_results_summ['Transducer_Pressure'][curr_row])				
+				samp_weight = float(df_results_summ['Sample_Weight'][curr_row])
+				NuCarb_temp = float(df_results_summ['Ave_Temperature'][curr_row])
+				pumpover = float(df_results_summ['MaxPumpOverPressure_'][curr_row])
+				init_beam = float(df_results_summ['Initial_Sam Beam'][curr_row])
+				balance = float(df_results_summ['Balance_%'][curr_row])
+				vial_loc = float(df_results_summ['Vial_Location'][curr_row])
 
-			meta_data_list = [file_number, transduc_press, samp_weight, NuCarb_temp, pumpover, init_beam, balance, vial_loc, bad_count]
+				meta_data_list = [file_number, transduc_press, samp_weight, NuCarb_temp, pumpover, init_beam, balance, vial_loc, bad_count]
 
-			# Remove any replicates that fail thresholds, write a message to the terminal
-			if transduc_press < transducer_pressure_thresh:
-				rmv_analyses.append(file_number)
-				rmv_msg.append((str(rmv_analyses[0]) + ' failed transducer pressure requirements (transducer_pressure = ' + str(round(transduc_press,1)) + ')' ))
-			if balance > balance_high or balance < balance_low:
-				rmv_analyses.append(file_number)
-				rmv_msg.append((str(rmv_analyses[0]) + ' failed balance requirements (balance = ' +  str(round(balance,1)) + ')'))
-			if bad_count > bad_count_thresh:
-				rmv_analyses.append(file_number)
-				rmv_msg.append((str(rmv_analyses[0]) + ' failed cycle-level reproducibility requirements (bad cycles = ' + str(bad_count) + ')'))
+				# Remove any replicates that fail thresholds, write a message to the terminal
+				if transduc_press < transducer_pressure_thresh:
+					rmv_analyses.append(file_number)
+					rmv_msg.append((str(rmv_analyses[0]) + ' failed transducer pressure requirements (transducer_pressure = ' + str(round(transduc_press,1)) + ')' ))
+				if balance > balance_high or balance < balance_low:
+					rmv_analyses.append(file_number)
+					rmv_msg.append((str(rmv_analyses[0]) + ' failed balance requirements (balance = ' +  str(round(balance,1)) + ')'))
+				if bad_count > bad_count_thresh:
+					rmv_analyses.append(file_number)
+					rmv_msg.append((str(rmv_analyses[0]) + ' failed cycle-level reproducibility requirements (bad cycles = ' + str(bad_count) + ')'))
+
+			else:
+				meta_data_list = [file_number, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, bad_count]
+	
 	# If replicate doesn't fail any thresholds, calculate the mean lil delta and return as a list
 	if bad_count < bad_count_thresh and file_number not in rmv_analyses:
 		d45_avg = format(df_results['d45'].mean(), 'f')
@@ -302,10 +314,16 @@ def fix_names(df):
 	'''Changes names of standards and samples to uniform entries based on conversion spreadsheet (names_to_change.csv)'''		
 
 	df['Sample'] = df['Sample'].str.strip() # strip whitespace
-	ntc_file = Path.cwd() / 'names_to_change.csv' 
-	df_new = pd.read_csv(ntc_file, encoding = 'latin1')
+	df_new = pd.read_excel(xls, 'Names_to_change')
+
 	for i in range(len(df_new)):
 		df['Sample']=df['Sample'].str.replace(df_new['old_name'][i], df_new['new_name'][i]) # replace old with new
+	print(df_rnm_rmv
+)	# rename samples based on UID from user-specified input in params.csv $%^&*()
+	if len(df_rnm_rmv) > 0: #if there's anything to rename
+		for i in range(len(df_rnm_rmv)):
+			rnm_loc = np.where(df['UID'] == df_rnm_rmv['UID'][i])[0] # get index location of particular UID
+			df['Sample'].iloc[rnm_loc] = df_rnm_rmv['New_name'][i] # replace sample name in main df with sample name from rnm_rmv
 
 	def change_anchor_name(old, new, d47_low, d47_high, d46_low, d46_high):
 		'''Fixes mistake of labelling IAEA-C1 as IAEA-C2 or vice-versa'''
@@ -321,6 +339,17 @@ def fix_names(df):
 	dir_path_fixed = Path.cwd() / 'results' / 'raw_deltas.csv' # write new names to file
 	df.to_csv(dir_path_fixed, index = False)
 
+def raw_ratio_plot(df_zc, file_n, samp_name):
+	y = 'm44'
+	df_zc_sam = df_zc.iloc[sam_idx]
+	plt.scatter(df_zc.index, df_zc[y], color = pal[0], s = 15, label = 'ref')
+	plt.scatter(df_zc_sam.index, df_zc_sam[y], color = pal[1], s = 15, label = 'sam')
+	title = y + ' ' + str(file_n) + samp_name
+	plt.title(title)
+	plt.ylabel(y)
+	plt.xlabel('cycle')
+	plt.legend()
+	plt.savefig(Path.cwd() / 'raw_data' / 'single_analyses' / (title + '.png'))
 
 def run_D47crunch():
 	# This pulls in Mathieu Daeron's D47crunch package (https://github.com/mdaeron/D47crunch),
@@ -383,12 +412,12 @@ def add_metadata(dir_path, rptability, batch_data_list):
 	'''Merges data from a user-specified spreadsheet to the output of D47crunch with "Sample" as key'''
 	
 	file = Path.cwd() / 'results' / 'samples.csv'
-	file_meta = Path.cwd() / 'metadata.xlsx'
+	file_meta = Path.cwd() / 'params.xlsx'
 	
 	df = pd.read_csv(file, encoding = 'latin1')
 
 	if os.path.exists(file_meta):
-		df_meta = pd.read_excel(file_meta)
+		df_meta = pd.read_excel(file_meta, 'Metadata')
 		df = df.merge(df_meta, how = 'left')
 
 	def calc_meas_95(N):
@@ -401,17 +430,24 @@ def add_metadata(dir_path, rptability, batch_data_list):
 	# Calc Bernasconi et al. (2018) temperature
 	#df['Bern_2018_temp'] = round(df['D47'].map(calc_bern_temp), 2)
 
-	# Calc Anderson et al. (2020?) temperature
+	# Calc Anderson et al. (2021) temperature
 	df['T_MIT'] = df['D47'].map(calc_MIT_temp)
 	df['T_MIT'] = round(df['T_MIT'], 1)
+
+	df['95% CL'] = df['95% CL'].astype('float64')
+	df['SE'] = df['SE'].astype('float64')
+
+	T_MIT_95CL = df['D47'] + df['95% CL']
+	df['T_MIT_95CL'] = round(df['T_MIT'] - T_MIT_95CL.map(calc_MIT_temp), 1)
+
+	T_MIT_SE = df['D47'] + df['SE']
+	df['T_MIT_SE'] = round(df['T_MIT'] - T_MIT_SE.map(calc_MIT_temp), 1)
 
 	# Calc Petersen et al. (2019) temperature
 	df['T_Petersen'] = df['D47'].map(calc_Petersen_temp).astype('float64')
 	df['T_Petersen'] = round(df['T_Petersen'], 1)
 
 	eps = df['T_MIT'].map(make_water)
-	df['d18O_water_VSMOW'] = df['d18O_VSMOW'] - eps
-	df['d18O_water_VSMOW'] = round(df['d18O_water_VSMOW'], 1)
 
 	if 'Mineralogy' in df.columns:
 		df['d18O_VPDB_mineral'] = round(((df['d18O_VSMOW'] - list(map(thousandlna, df['Mineralogy']))) - 30.92)/1.03092, 1) # convert from CO2 d18O (VSMOW) to mineral d18O (VPDB)
@@ -437,6 +473,10 @@ def add_metadata(dir_path, rptability, batch_data_list):
 	df_anal['Init_Sam_beam'] = df_batch[5]
 	df_anal['Balance'] = df_batch[6]
 	df_anal['Vial_Location'] = df_batch[7]
+
+	eth_loc = np.where(df_anal['Sample'] == 'ETH-4')	
+	mbar_mg_eth = (df_anal['Transducer_Pressure'].iloc[eth_loc] / df_anal['Sample_Weight'].iloc[eth_loc]).median()
+	df_anal['pct_evolved_carbonate'] = round(((df_anal['Transducer_Pressure'] / df_anal['Sample_Weight']) / mbar_mg_eth)*100, 1)
 
 	df_anal.to_csv(Path.cwd() / 'results' / 'analyses.csv', index = False)
 
@@ -465,14 +505,14 @@ def plot_ETH_D47(repeatability_all):
 	ax.axhline(4.5, linestyle = '--', color = 'gray', alpha = 0.5)
 	ax.axhline(5.5, linestyle = '--', color = 'gray', alpha = 0.5)
 
-	label = '> 3SD external reprod.'
+	label = '> 3SD external reprod.; *not automatically disabled*'
 	for i in Nominal_D47:
 		ax.scatter(Nominal_D47[i], i, marker = 'd', color = pal[2], edgecolor = 'black')
 		for j in range(len(df_anchor)):
 			if df_anchor['Sample'][j] == i:
 				if df_anchor['D47'][j] > (Nominal_D47[i] + 3*repeatability_all) or df_anchor['D47'][j] < (Nominal_D47[i] - 3*repeatability_all):
-					ax.scatter(df_anchor['D47'][j], df_anchor['Sample'][j], color = 'red', alpha = 1, edgecolor = 'black', label = label)
-					ax.text(df_anchor['D47'][j] + 0.005, df_anchor['Sample'][j], df_anchor['UID'][j], zorder = 6, family = 'sans-serif')
+					ax.scatter(df_anchor['D47'][j], df_anchor['Sample'][j], color = 'orange', alpha = 1, edgecolor = 'black', label = label)
+					ax.text(df_anchor['D47'][j] + 0.005, df_anchor['Sample'][j], df_anchor['UID'][j], zorder = 6)#, family = 'sans-serif')
 					label = None
 	plt.xlabel('D47 I-CDES')
 	plt.legend()
@@ -683,7 +723,7 @@ def cdv_plots():
 	plt.figure(figsize = (6, 4))
 	df = df.loc[df['Sample'] == 'IAEA-C1']
 	plt.scatter(df['UID'], df['D47'], color = pal[0], edgecolor = 'black')
-	plt.axhline(0.3, color = pal[2])
+	plt.axhline(0.3018, color = pal[2])
 	plt.grid(b=True, which='major', color='gray', linestyle='--', zorder = 0, alpha = 0.4)	
 	plt.xlabel('UID')
 	plt.ylabel('D47')
