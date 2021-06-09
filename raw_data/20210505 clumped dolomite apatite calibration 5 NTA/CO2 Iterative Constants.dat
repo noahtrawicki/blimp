@@ -1,0 +1,16 @@
+"Version 1"
+"Alpha Constant",0.5164
+"K constant",9.20235e-3
+"13C/12C of PDB",.0112372
+"17O/16O of PDB",.000378058
+"18O/16O of PDB",.00206716068
+
+Data from Santrock et al. The program is totally generic, so if other constants are required, simply change to the
+new values. eg for Assonov and Breeinkmeiger method:
+
+Alpha = 0.528
+K = 0.0102819
+17O/16O = 0.0020052
+18o/16O = 0.00386913
+
+Etc
