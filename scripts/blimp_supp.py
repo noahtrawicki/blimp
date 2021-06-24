@@ -260,7 +260,7 @@ def raw_to_D47crunch_fmt(results_file, file_number, current_sample, file_count, 
 		if 'Batch Results.csv' in i and 'fail' not in os.listdir(this_path): # checks for results summary file, doesn't run if one of the samples failed (THIS DOESNT WORK)
 			summ_file = Path.cwd() / 'raw_data' / folder_name / i
 			df_results_summ = pd.read_csv(summ_file, encoding = 'latin1', skiprows = 3, header = [0,1])
-			df_results_summ.columns = df_results_summ.columns.map('_'.join).str.strip()		
+			df_results_summ.columns = df_results_summ.columns.map('_'.join).str.strip()	# fixes weird headers of Nu Summary files
 
 			#Get the index location of the row that corresponds to the given file number (i.e. replicate)
 			curr_row = df_results_summ.loc[df_results_summ['Data_File'].str.contains(str(file_number))].index		
@@ -315,11 +315,11 @@ def fix_names(df):
 
 	df['Sample'] = df['Sample'].str.strip() # strip whitespace
 	df_new = pd.read_excel(xls, 'Names_to_change')
-
+	
 	for i in range(len(df_new)):
 		df['Sample']=df['Sample'].str.replace(df_new['old_name'][i], df_new['new_name'][i]) # replace old with new
-	print(df_rnm_rmv
-)	# rename samples based on UID from user-specified input in params.csv $%^&*()
+
+# rename samples based on UID from user-specified input in params.csv $%^&*()
 	if len(df_rnm_rmv) > 0: #if there's anything to rename
 		for i in range(len(df_rnm_rmv)):
 			rnm_loc = np.where(df['UID'] == df_rnm_rmv['UID'][i])[0] # get index location of particular UID

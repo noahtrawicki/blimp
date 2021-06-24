@@ -67,6 +67,7 @@ if os.path.isdir(Path.cwd()/ 'raw_data' / 'single_analyses'):
 			raw_ratio_plot(df_zc, file_n, samp_name)
 
 df_d47 = pd.DataFrame(d47_crunch_fmt, columns = ['UID', 'Session', 'Sample', 'd45', 'd46', 'd47', 'd48', 'd49'])
+
 b_s.fix_names(df_d47)
 
 rptability = b_s.run_D47crunch()
