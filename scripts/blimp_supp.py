@@ -64,7 +64,10 @@ def calc_bern_temp(D47_value):
 
 def calc_MIT_temp(D47_value):
 	''' Calculates D47 temp using preliminary calibration from Anderson et al. (2020) 90C'''
-	return (((0.039 * 1000000) / (D47_value - 0.153))**0.5) - 273.15
+	if D47_value > 0.153: #(prevents complex returns)
+		return (((0.039 * 1000000) / (D47_value - 0.153))**0.5) - 273.15
+	else:
+		return np.nan
 
 def calc_Petersen_temp(D47_value):
 	'''Calculates D47 temperature (C) using calibration from Petersen et al. (2019) 90C'''
@@ -463,6 +466,20 @@ def add_metadata(dir_path, rptability, batch_data_list):
 
 	df_anal = pd.read_csv(Path.cwd() / 'results' / 'analyses.csv')
 	df_batch = pd.DataFrame(batch_data_list)
+
+	df_anal['T_MIT'] = df_anal['D47'].map(calc_MIT_temp)
+	df_anal['T_MIT'] = round(df_anal['T_MIT'], 1)
+
+	eps = df_anal['T_MIT'].map(make_water)
+
+	if 'Mineralogy' in df_anal.columns:
+		df_anal['d18O_VPDB_mineral'] = round(((df_anal['d18O_VSMOW'] - list(map(thousandlna, df_anal['Mineralogy']))) - 30.92)/1.03092, 1) # convert from CO2 d18O (VSMOW) to mineral d18O (VPDB)
+		df_anal['d18O_water_VSMOW'] = df_anal['d18O_VSMOW'] - eps - list(map(thousandlna, df_anal['Mineralogy'])) # convert from CO2  d18O VSMOW to water d18O VSMOW
+		df_anal['d18O_water_VSMOW'] = round(df_anal['d18O_water_VSMOW'], 1)
+	else:
+		df_anal['d18O_VPDB_mineral'] = round(((df_anal['d18O_VSMOW'] - 1000*np.log(1.00871) - 30.92)/1.03092), 1) # convert from CO2 d18O (VSMOW) to calcite d18O (VPDB) if mineralogy not specified
+		df_anal['d18O_water_VSMOW'] = df_anal['d18O_VSMOW'] - eps - 1000*np.log(1.00871) # convert from CO2  d18O VSMOW to water d18O VSMOW
+		df_anal['d18O_water_VSMOW'] = round(df_anal['d18O_water_VSMOW'], 1)
 
 	df_anal = df_anal.merge(df_meta, how = 'left', on = 'Sample')
 
