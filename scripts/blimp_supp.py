@@ -588,37 +588,43 @@ def plot_ETH_D47(repeatability_all):
 
 	# ------ PLOT D47 ALL --------
 
-	fig, ax = plt.subplots(figsize = (7, 12))
+	fig_ht = len(df)*0.07
+
+	fig, ax = plt.subplots(figsize = (7, fig_ht))
 	ax.scatter(df['D47'], df['Sample'], alpha = 0.8, edgecolor = 'black', label = 'Unknown')
 	plt.grid(b=True, which='major', color='gray', linestyle='--', zorder = 0, alpha = 0.4)	
 	for i in range(len(df)):
 		if "ETH" in df.Sample.iloc[i] or "IAEA" in df.Sample.iloc[i] or "MERCK" in df.Sample.iloc[i]:
 			ax.scatter(df.D47.iloc[i], df.Sample.iloc[i], color = pal[1], edgecolor = 'black', linewidth = .75, zorder = 9, label = 'Anchor')
 	plt.xlabel('D47 I-CDES')	
+	plt.tight_layout()
 	plt.savefig(Path.cwd().parents[0] / 'plots' / 'all_D47.png')
+
 	plt.close()
 
 	# ----- PLOT d13C/d18O -------
 
 	d13C_median = df.groupby('Sample')['d13C_VPDB'].median()
 		
-	fig, ax = plt.subplots(figsize = (7, 12))
+	fig, ax = plt.subplots(figsize = (7, fig_ht))
 
 	for i in range(len(df)):
 		samp = df['Sample'][i]
 		ax.scatter(df['d13C_VPDB'][i] - d13C_median[samp], samp, color = pal[0], edgecolor = 'black')
 	plt.xlabel('d13C VPDB offset from median')
 	plt.grid(b=True, which='major', color='gray', linestyle='--', zorder = 0, alpha = 0.4)	
+	plt.tight_layout()
 	plt.savefig(Path.cwd().parents[0] / 'plots' / 'd13C.png')
 
 	d18O_median = df.groupby('Sample')['d18O_VSMOW'].median()
 
-	fig, ax = plt.subplots(figsize = (7, 12))
+	fig, ax = plt.subplots(figsize = (7, fig_ht))
 	for i in range(len(df)):
 		samp = df['Sample'][i]
 		ax.scatter(df['d18O_VSMOW'][i] - d18O_median[samp], samp, color = pal[0], edgecolor = 'black')
 	plt.xlabel('d18O VSMOW offset from median')
-	plt.grid(b=True, which='major', color='gray', linestyle='--', zorder = 0, alpha = 0.4)	
+	plt.grid(b=True, which='major', color='gray', linestyle='--', zorder = 0, alpha = 0.4)
+	plt.tight_layout()
 	plt.savefig(Path.cwd().parents[0] / 'plots' / 'd18O.png')
 	
 def joy_plot():
