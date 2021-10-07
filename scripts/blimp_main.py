@@ -1,4 +1,4 @@
-# -- VERSION 0.1.0 updated 20211007 by NTA -- 
+# --- VERSION 0.1.0 updated 20211007 by NTA ---
 
 
 import os
