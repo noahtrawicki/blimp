@@ -12,7 +12,6 @@ from bokeh.models.tools import HoverTool
 from bokeh.layouts import row
 
 
-
 dir_path = Path.cwd().parents[0]
 os.chdir(dir_path)
 
@@ -34,12 +33,8 @@ d47_crunch_fmt = []
 batch_data_list = []
 fold_count = 0
 
-
-
 def plot_lil_d(file_n, samp_name, lil_d):
 	pass
-
-
 
 # -- THIS GRABS NU SUMMARY FILE and PLOTS -- 
 
@@ -62,7 +57,12 @@ def read_and_plot_summary(folder_name):
 
 	output_file('bokeh_TEST.html')
 
+	df = pd.read_csv(Path.cwd() / 'results' / 'analyses.csv')
+
 	data = ColumnDataSource.from_df(df_summ)
+	data_analyses = ColumnDataSource.from_df(df)
+
+
 	TOOLTIPS = [("Sample name", "@Sample_Name"),
 				("UID", "@Data_File")]
 	std_tools = ['pan,wheel_zoom,box_zoom,reset,hover']
@@ -79,9 +79,20 @@ def read_and_plot_summary(folder_name):
     	tooltips=TOOLTIPS)
 	f2.scatter('Vial_Location', 'Balance_%', source = data)
 
+	TOOLTIPS = [("Sample name", "@Sample"),
+			("UID", "@UID")]
 
-	show(row(f1, f2))
 
+
+	f3 = figure(x_axis_label = 'd47',
+				y_axis_label = 'D47',
+				tools = std_tools,
+				tooltips = TOOLTIPS)
+	f3.scatter('d47', 'D47', source = data_analyses)
+
+	show(row(f1, f3))
+
+	exit()
 
 
 		# -- THIS MAKES PLOTS --
@@ -92,15 +103,15 @@ if os.path.isdir(rd_path): # If there is a raw data folder...
 	for folder in os.listdir(rd_path):
 		print(folder)	
 		if 'clumped' in folder or 'Clumped' in folder:			
-			for file in os.listdir(Path.cwd() / 'raw_data' / folder):
-				if 'Data' in file and '.txt' in file and '.fail' not in file:
-					file_path = rd_path / folder / file					
-					if os.path.getsize(file_path) > 225000:	# Make sure .txt file is complete					
-						file_n = int(file[5:10])
-						samp_name = str(file[10:-4])													
-						lil_d = b_s.read_Nu_data(Path.cwd() / 'raw_data' / folder / file, file_n, samp_name)
-						plot_lil_d(file_n, samp_name, lil_d)					
-						d47_crunch_fmt.append(lil_d)
+			# for file in os.listdir(Path.cwd() / 'raw_data' / folder):
+			# 	if 'Data' in file and '.txt' in file and '.fail' not in file:
+			# 		file_path = rd_path / folder / file					
+			# 		if os.path.getsize(file_path) > 225000:	# Make sure .txt file is complete					
+			# 			file_n = int(file[5:10])
+			# 			samp_name = str(file[10:-4])													
+			# 			lil_d = b_s.read_Nu_data(Path.cwd() / 'raw_data' / folder / file, file_n, samp_name)
+			# 			plot_lil_d(file_n, samp_name, lil_d)					
+			# 			d47_crunch_fmt.append(lil_d)
 
 			read_and_plot_summary(folder)
 
