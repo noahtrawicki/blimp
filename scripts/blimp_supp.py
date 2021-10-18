@@ -243,10 +243,11 @@ def read_Nu_data(data_file, file_number, current_sample, folder_name, run_type):
 	 	lil_del_dict_eth3_UID.append(file_number)	 
 
 
-	batch_data_list = [file_number, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan]
+	batch_data_list = [file_number, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan]
 
 	# Calculate median of all cycles.
 	median_47 = df_lil_del['d47'].median()
+	d47_pre_SE = df_lil_del['d47'].sem()
 	 
 	# -- FIND BAD CYCLES --  
 	# Removes any cycles that have d47 values > 5 SD away from sample median. If more than 'bad_count_thresh' cycles violate this criteria, entire replicate is removed.
@@ -265,6 +266,7 @@ def read_Nu_data(data_file, file_number, current_sample, folder_name, run_type):
 
 	session = str(folder_name[:8]) # creates name of session; first 8 characters of folder name are date of run start per our naming convention (e.g., 20211008 clumped apatite NTA = 20211008) 
 	
+	d47_post_SE = df_lil_del['d47'].sem()
 
 	rmv_analyses = [] # analysis to be removed
 	
@@ -280,7 +282,7 @@ def read_Nu_data(data_file, file_number, current_sample, folder_name, run_type):
 
 			#Get the index location of the row that corresponds to the given file number (i.e. replicate)
 			curr_row = df_results_summ.loc[df_results_summ['Data_File'].str.contains(str(file_number))].index
-			batch_data_list = [file_number, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, bad_count]
+			batch_data_list = [file_number, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, d47_pre_SE, d47_post_SE, bad_count]
 			if len(curr_row) == 1 and run_type == 'clumped': # curr_row is Int64Index, which acts like a list. If prev line finds either 0 or 2 matching lines, it will skip this section.
 				transduc_press = float(df_results_summ['Transducer_Pressure'][curr_row])				
 				samp_weight = float(df_results_summ['Sample_Weight'][curr_row])
@@ -293,7 +295,7 @@ def read_Nu_data(data_file, file_number, current_sample, folder_name, run_type):
 				d18O_SE = float(df_results_summ['Std_Err.6'][curr_row])
 				D47_SE = float(df_results_summ['Std_Err.7'][curr_row])
 
-				batch_data_list = [file_number, transduc_press, samp_weight, NuCarb_temp, pumpover, init_beam, balance, vial_loc, d13C_SE, d18O_SE, D47_SE, bad_count]
+				batch_data_list = [file_number, transduc_press, samp_weight, NuCarb_temp, pumpover, init_beam, balance, vial_loc, d13C_SE, d18O_SE, D47_SE, d47_pre_SE, d47_post_SE, bad_count]
 
 
 				# Remove any replicates that fail thresholds, compile a message that will be written to the terminal
@@ -310,7 +312,7 @@ def read_Nu_data(data_file, file_number, current_sample, folder_name, run_type):
 			break # Found a matching file? There only should be one, so stop here.
 
 		else: # Couldn't find matching UID, or got confused. No batch summary data included.
-			batch_data_list = [file_number, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, bad_count]
+			batch_data_list = [file_number, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, d47_pre_SE, d47_post_SE, bad_count]
 	
 	# If replicate doesn't fail any thresholds, calculate the mean lil delta and return as a list
 	if bad_count < bad_count_thresh and file_number not in rmv_analyses:
@@ -522,44 +524,55 @@ def add_metadata(dir_path, rptability, batch_data_list):
 	df['95% CL'] = df['95% CL'].astype('float64')
 	df['SE'] = df['SE'].astype('float64')
 
-	# Calculate upper and lower 95 CL temperatures (as the 'distance' of the error bar -- so 20 C sample with 10 C upper 95CL = 30 C 95 CL value)
-	T_MIT_95CL_upper = df['D47'] + df['95% CL']
-	df['T_MIT_95CL_upper'] = round(abs(df['T_MIT'] - T_MIT_95CL_upper.map(calc_MIT_temp)), 1)
+	# Calculate upper and lower 95 CL temperatures (as the 'value' of the error bar -- so 20 C sample with 30 C upper 95CL = 10 C 95 CL value)
+	T_MIT_95CL_lower = df['D47'] + df['95% CL']
+	df['T_MIT_95CL_lower'] = round(abs(T_MIT_95CL_lower.map(calc_MIT_temp)), 1)
 
-	T_MIT_95CL_lower = df['D47'] - df['95% CL']
-	df['T_MIT_95CL_lower'] = round(abs(df['T_MIT'] - T_MIT_95CL_lower.map(calc_MIT_temp)), 1)
+	T_MIT_95CL_upper = df['D47'] - df['95% CL']
+	df['T_MIT_95CL_upper'] = round(abs(T_MIT_95CL_upper.map(calc_MIT_temp)), 1)
 
 	T_MIT_SE = df['D47'] + df['SE']
-	df['T_MIT_SE'] = round(df['T_MIT'] - T_MIT_SE.map(calc_MIT_temp), 1)
+	df['T_MIT_SE'] = round(T_MIT_SE.map(calc_MIT_temp), 1)
 
 	# Calc Petersen et al. (2019) temperature
 	df['T_Petersen'] = df['D47'].map(calc_Petersen_temp).astype('float64')
 	df['T_Petersen'] = round(df['T_Petersen'], 1)
 
 	eps_KON97 = df['T_MIT'].map(make_water_KON97)
+	eps_KON97_upper = df['T_MIT_95CL_upper'].map(make_water_KON97)
+	eps_KON97_lower = df['T_MIT_95CL_lower'].map(make_water_KON97)
+
 	eps_A21 = df['T_MIT'].map(make_water_A21)
-	
+	eps_A21_upper = df['T_MIT_95CL_upper'].map(make_water_A21)
+	eps_A21_lower = df['T_MIT_95CL_lower'].map(make_water_A21)
+		
 	df['T_MIT'] = round(df['T_MIT'], 1)
 
-	if 'Mineralogy' in df.columns:
-		# Calculate mineral-specific d18O based on mineralogy specified in user metadata
+	def calc_d18Ow(eps):
 
-		df['d18O_VPDB_mineral'] = round(((df['d18O_VSMOW'] - list(map(thousandlna, df['Mineralogy']))) - 30.92)/1.03092, 1) # convert from CO2 d18O (VSMOW) to mineral d18O (VPDB)
+		if 'Mineralogy' in df.columns:
+			df['d18O_VPDB_mineral'] = round(((df['d18O_VSMOW'] - list(map(thousandlna, df['Mineralogy']))) - 30.92)/1.03092, 1) # convert from CO2 d18O (VSMOW) to mineral d18O (VPDB)
+			d18Ow_VSMOW = round(df['d18O_VSMOW'] - eps - list(map(thousandlna, df['Mineralogy'])),1) # convert from CO2  d18O VSMOW to water d18O VSMOW
 
-		df['d18O_water_VSMOW_KON97'] = round(df['d18O_VSMOW'] - eps_KON97 - list(map(thousandlna, df['Mineralogy'])),1) # convert from CO2  d18O VSMOW to water d18O VSMOW using Kim and O'Neil (1997)
-		df['d18O_water_VSMOW_A21'] = round(df['d18O_VSMOW'] - eps_A21 - list(map(thousandlna, df['Mineralogy'])),1) # convert from CO2  d18O VSMOW to water d18O VSMOW using Anderson et al. (2021)
-	
-	else:
-		df['d18O_VPDB_mineral'] = round(((df['d18O_VSMOW'] - 1000*np.log(1.00871) - 30.92)/1.03092), 1) # convert from CO2 d18O (VSMOW) to calcite d18O (VPDB) if mineralogy not specified
-		df['d18O_water_VSMOW_KON97'] = round(df['d18O_VSMOW'] - eps_KON97 - 1000*np.log(1.00871),1) # convert from CO2  d18O VSMOW to water d18O VSMOW using Kim and O'Neil (1997)
-		df['d18O_water_VSMOW_A21'] = round(df['d18O_VSMOW'] - eps_A21 - 1000*np.log(1.00871),1) # convert from CO2  d18O VSMOW to water d18O VSMOW using Anderson et al. (2021)	
-		
+		else:
+			df['d18O_VPDB_mineral'] = round(((df['d18O_VSMOW'] - 1000*np.log(1.00871) - 30.92)/1.03092), 1) # convert from CO2 d18O (VSMOW) to calcite d18O (VPDB) if mineralogy not specified
+			d18Ow_VSMOW = round(df['d18O_VSMOW'] - eps - 1000*np.log(1.00871),1) # convert from CO2  d18O VSMOW to water d18O VSMOW using Kim and O'Neil (1997)
+
+		return d18Ow_VSMOW
+
+	df['d18Ow_VSMOW_KON97'] = calc_d18Ow(eps_KON97)
+	df['d18Ow_VSMOW_KON97_upper'] = calc_d18Ow(eps_KON97_upper)
+	df['d18Ow_VSMOW_KON97_lower'] = calc_d18Ow(eps_KON97_lower)
+
+	df['d18Ow_VSMOW_A21'] = calc_d18Ow(eps_A21)
+	df['d18Ow_VSMOW_A21_upper'] = calc_d18Ow(eps_A21_upper)
+	df['d18Ow_VSMOW_A21_lower'] = calc_d18Ow(eps_A21_lower)
 
 	df.to_csv(Path.cwd() / 'results' / 'summary.csv', index = False)
 
 	df_anal = pd.read_csv(Path.cwd() / 'results' / 'analyses.csv')
 	df_batch = pd.DataFrame(batch_data_list, columns = ['UID', 'Transducer_Pressure', 'Sample_Weight', 'NuCarb_temp','Pumpover_Pressure',
-		'Init_Sam_beam', 'Balance', 'Vial_Location', 'd13C_SE (Nu)', 'd18O_SE (Nu)', 'D47_SE (Nu)', 'Bad_Cycles'])
+		'Init_Sam_beam', 'Balance', 'Vial_Location', 'd13C_SE (Nu)', 'd18O_SE (Nu)', 'D47_SE (Nu)', 'd47_pre_SE', 'd47_post_SE', 'Bad_Cycles'])
 
 	df_anal['T_MIT'] = df_anal['D47'].map(calc_MIT_temp)
 	df_anal['T_MIT'] = round(df_anal['T_MIT'], 1)
