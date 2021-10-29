@@ -40,31 +40,32 @@ if os.path.isdir(rd_path): # If there is a raw data folder...
 	print('Crunching folders: ')
 	
 	for folder in os.listdir(rd_path):
-		if os.path.isdir(rd_path / folder): print(folder) # if the item you find is a directory, continue, else break the loop and go to the next. this helps with '.DS_store' and other random files
-		else: break
+		if os.path.isdir(rd_path / folder):
+			print(folder) # if the item you find is a directory, continue, else break the loop and go to the next. This helps with '.DS_store' and other random files		
 	
-		if 'clumped' in folder or 'Clumped' in folder:
-			run_type = 'clumped'
-		elif 'standard' or 'Standard' in folder:
-			run_type = 'standard'
-		else:
-			print('***Run type (standard or clumped) not defined. Add run type to run folder name.***')
-			break
+			if 'clumped' in folder or 'Clumped' in folder:
+				run_type = 'clumped'
+			elif 'standard' or 'Standard' in folder:
+				run_type = 'standard'
+			else:
+				print('***Run type (standard or clumped) not defined. Add run type to run folder name.***')
+				break
 
-		for file in os.listdir(Path.cwd() / 'raw_data' / folder):
-			if 'Data' in file and '.txt' in file and '.fail' not in file:
-				file_path = rd_path / folder / file					
-				if os.path.getsize(file_path) > 225000 or run_type == 'standard':	# Make sure .txt file is complete					
-					file_n = int(file[5:10])
-					samp_name = str(file[10:-4])
-					if file_n not in manual_rmv:
-						lil_d, batch_data = b_s.read_Nu_data(file_path, file_n, samp_name, folder, run_type)						
-						if lil_d != None:		
-							d47_crunch_fmt.append(lil_d)
-						if batch_data != None:
-							batch_data_list.append(batch_data)
+			for file in os.listdir(Path.cwd() / 'raw_data' / folder):
+				if 'Data' in file and '.txt' in file and '.fail' not in file:
+					file_path = rd_path / folder / file					
+					if os.path.getsize(file_path) > 225000 or run_type == 'standard':	# Make sure .txt file is complete					
+						file_n = int(file[5:10])
+						samp_name = str(file[10:-4])
+						if file_n not in manual_rmv:
+							lil_d, batch_data = b_s.read_Nu_data(file_path, file_n, samp_name, folder, run_type)						
+							if lil_d != None:		
+								d47_crunch_fmt.append(lil_d)
+							if batch_data != None:
+								batch_data_list.append(batch_data)
 
-			fold_count += 1
+				fold_count += 1
+		else: print('Ignoring ', folder)
 
 df_d47 = pd.DataFrame(d47_crunch_fmt, columns = ['UID', 'Session', 'Sample', 'd45', 'd46', 'd47', 'd48', 'd49'])
 
