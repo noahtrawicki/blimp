@@ -1,4 +1,4 @@
-# --- VERSION 0.1.2 updated 20211101 by NTA ---
+# --- VERSION 0.1.3 updated 20211101 by NTA ---
 
 import pandas as pd
 import numpy as np
@@ -541,11 +541,11 @@ def add_metadata(dir_path, rptability, batch_data_list):
 	df['T_Petersen'] = df['D47'].map(calc_Petersen_temp).astype('float64')
 	df['T_Petersen'] = round(df['T_Petersen'], 1)
 
-	eps_KON97 = df['T_MIT'].map(make_water_KON97)
 
 	T_MIT_95CL_upper_val = df['T_MIT'] + df['T_MIT_95CL_upper']
 	T_MIT_95CL_lower_val = df['T_MIT'] - df['T_MIT_95CL_lower']
 
+	eps_KON97 = df['T_MIT'].map(make_water_KON97)
 	eps_KON97_upper = T_MIT_95CL_upper_val.map(make_water_KON97)
 	eps_KON97_lower = T_MIT_95CL_lower_val.map(make_water_KON97)
 
@@ -568,12 +568,12 @@ def add_metadata(dir_path, rptability, batch_data_list):
 		return d18Ow_VSMOW
 
 	df['d18Ow_VSMOW_KON97'] = calc_d18Ow(eps_KON97)
-	df['d18Ow_VSMOW_KON97_upper'] = calc_d18Ow(eps_KON97_upper)
-	df['d18Ow_VSMOW_KON97_lower'] = calc_d18Ow(eps_KON97_lower)
+	df['d18Ow_VSMOW_KON97_upper'] = round(abs(df['d18Ow_VSMOW_KON97'] - calc_d18Ow(eps_KON97_upper)), 1)
+	df['d18Ow_VSMOW_KON97_lower'] = round(abs(df['d18Ow_VSMOW_KON97'] - calc_d18Ow(eps_KON97_lower)), 1)
 
 	df['d18Ow_VSMOW_A21'] = calc_d18Ow(eps_A21)
-	df['d18Ow_VSMOW_A21_upper'] = calc_d18Ow(eps_A21_upper)
-	df['d18Ow_VSMOW_A21_lower'] = calc_d18Ow(eps_A21_lower)
+	df['d18Ow_VSMOW_A21_upper'] = round(abs(df['d18Ow_VSMOW_A21'] - calc_d18Ow(eps_A21_upper)), 1)
+	df['d18Ow_VSMOW_A21_lower'] = round(abs(df['d18Ow_VSMOW_A21'] - calc_d18Ow(eps_A21_lower)), 1)
 
 	df.to_csv(Path.cwd() / 'results' / 'summary.csv', index = False)
 
@@ -582,10 +582,10 @@ def add_metadata(dir_path, rptability, batch_data_list):
 		'Init_Sam_beam', 'Balance', 'Vial_Location', 'd13C_SE (Nu)', 'd18O_SE (Nu)', 'D47_SE (Nu)', 'd47_pre_SE', 'd47_post_SE', 'Bad_Cycles'])
 
 	df_anal['T_MIT'] = df_anal['D47'].map(calc_MIT_temp)
-	df_anal['T_MIT'] = round(df_anal['T_MIT'], 1)
-
 	eps_KON97 = df_anal['T_MIT'].map(make_water_KON97)
 	eps_A21 = df_anal['T_MIT'].map(make_water_A21)
+
+	df_anal['T_MIT'] = round(df_anal['T_MIT'], 1)
 
 	if 'Mineralogy' in df_anal.columns:
 		df_anal['d18O_VPDB_mineral'] = round(((df_anal['d18O_VSMOW'] - list(map(thousandlna, df_anal['Mineralogy']))) - 30.92)/1.03092, 1) # convert from CO2 d18O (VSMOW) to mineral d18O (VPDB)
