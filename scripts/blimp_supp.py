@@ -1,4 +1,4 @@
-# -- VERSION 0.1.0 updated 20211007 by NTA -- 
+# --- VERSION 0.1.2 updated 20211101 by NTA ---
 
 import pandas as pd
 import numpy as np
@@ -524,27 +524,34 @@ def add_metadata(dir_path, rptability, batch_data_list):
 	df['95% CL'] = df['95% CL'].astype('float64')
 	df['SE'] = df['SE'].astype('float64')
 
-	# Calculate upper and lower 95 CL temperatures (as the 'value' of the error bar -- so 20 C sample with 30 C upper 95CL = 10 C 95 CL value)
+	# Calculate upper and lower 95 CL temperatures (as the 'magnitude' of the error bar -- so 20 C sample with 10 C upper 95CL = 30 C upper 95 CL value)
 	T_MIT_95CL_lower = df['D47'] + df['95% CL']
-	df['T_MIT_95CL_lower'] = round(abs(T_MIT_95CL_lower.map(calc_MIT_temp)), 1)
+	df['T_MIT_95CL_lower'] = round(abs(df['T_MIT'] - T_MIT_95CL_lower.map(calc_MIT_temp)), 1)
 
 	T_MIT_95CL_upper = df['D47'] - df['95% CL']
-	df['T_MIT_95CL_upper'] = round(abs(T_MIT_95CL_upper.map(calc_MIT_temp)), 1)
+	df['T_MIT_95CL_upper'] = round(abs(df['T_MIT'] - T_MIT_95CL_upper.map(calc_MIT_temp)), 1)
 
-	T_MIT_SE = df['D47'] + df['SE']
-	df['T_MIT_SE'] = round(T_MIT_SE.map(calc_MIT_temp), 1)
+	T_MIT_SE_lower = df['D47'] + df['SE']
+	df['T_MIT_SE_lower'] = round(abs(df['T_MIT'] - T_MIT_SE_lower.map(calc_MIT_temp)), 1)
+
+	T_MIT_SE_upper = df['D47'] - df['SE']
+	df['T_MIT_SE_upper'] = round(abs(df['T_MIT'] - T_MIT_SE_upper.map(calc_MIT_temp)), 1)
 
 	# Calc Petersen et al. (2019) temperature
 	df['T_Petersen'] = df['D47'].map(calc_Petersen_temp).astype('float64')
 	df['T_Petersen'] = round(df['T_Petersen'], 1)
 
 	eps_KON97 = df['T_MIT'].map(make_water_KON97)
-	eps_KON97_upper = df['T_MIT_95CL_upper'].map(make_water_KON97)
-	eps_KON97_lower = df['T_MIT_95CL_lower'].map(make_water_KON97)
+
+	T_MIT_95CL_upper_val = df['T_MIT'] + df['T_MIT_95CL_upper']
+	T_MIT_95CL_lower_val = df['T_MIT'] - df['T_MIT_95CL_lower']
+
+	eps_KON97_upper = T_MIT_95CL_upper_val.map(make_water_KON97)
+	eps_KON97_lower = T_MIT_95CL_lower_val.map(make_water_KON97)
 
 	eps_A21 = df['T_MIT'].map(make_water_A21)
-	eps_A21_upper = df['T_MIT_95CL_upper'].map(make_water_A21)
-	eps_A21_lower = df['T_MIT_95CL_lower'].map(make_water_A21)
+	eps_A21_upper = T_MIT_95CL_upper_val.map(make_water_A21)
+	eps_A21_lower = T_MIT_95CL_lower_val.map(make_water_A21)
 		
 	df['T_MIT'] = round(df['T_MIT'], 1)
 
