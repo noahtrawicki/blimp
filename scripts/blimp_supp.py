@@ -1,4 +1,4 @@
-# --- VERSION 0.1.3 updated 20211101 by NTA ---
+# --- VERSION 0.1.4 BETA updated 20220131 by NTA ---
 
 import pandas as pd
 import numpy as np
@@ -39,6 +39,7 @@ df_anc = pd.read_excel(xls, 'Anchors', index_col = 'Anchor')
 df_const = pd.read_excel(xls, 'Constants', index_col = 'Name')
 df_threshold = pd.read_excel(xls, 'Thresholds', index_col = 'Type')
 df_rnm = pd.read_excel(xls, 'Rename_by_UID')
+df_meta = pd.read_excel(xls, 'Metadata')
 
 long_term_d47_SD = df_threshold['Value'].loc['long_term_SD']
 num_SD = df_threshold['Value'].loc['num_SD']
@@ -51,6 +52,10 @@ balance_low = df_threshold['Value'].loc['balance_low']
 calc_a18O = df_const['Value'].loc['calc_a18O']
 arag_a18O = df_const['Value'].loc['arag_a18O']
 dolo_a18O = df_const['Value'].loc['dolo_a18O']
+
+analyzed_minerals = pd.unique(df_meta['Mineralogy'].dropna())
+print(analyzed_minerals)
+
 
 Nominal_D47 = df_anc.to_dict()['D47'] # Sets anchor values for D47crunch as dictionary {Anchor: value}
 
@@ -76,24 +81,22 @@ def make_water_KON97(D47_T):
 	thousandlna_KON97 = 18.03 * (1e3 * (1/(D47_T + 273.15))) - 32.42
 	a_KON97 = np.exp((thousandlna_KON97/1000))
 	eps_KON97 = (a_KON97-1) * 1e3
-
-	return eps_KON97
+	return eps_KON97 # Epsilon for KON97
 
 def make_water_A21(D47_T):
 	'''Calculates fluid d18O based on D47 temperature from Anderson et al. (2021)'''
 	thousandlna_A21 = 17.5 * (1e3 * (1/(D47_T + 273.15))) - 29.1
 	a_A21 = np.exp((thousandlna_A21/1000))
-	eps_A21 = (a_A21-1) * 1e3
-	
-	return eps_A21
+	eps_A21 = (a_A21-1) * 1e3	
+	return eps_A21 # Epsilon for A21
 
 def thousandlna(mineral):
-		'''Calculates 18O acid fractination factor to convert CO2 d18O to mineral d18O'''
+		'''Calculates 18O acid fractination factor to convert CO2 d18O to mineral d18O (at 70C)'''
 		if mineral == 'calcite' or mineral == 'Calcite':
 			#a = 1.00871 # Kim (2007)
-			a = calc_a18O
+			a = calc_a18O # calc_a180 is set in params file
 		elif mineral == 'dolomite' or mineral == 'Dolomite':
-			#a = 1.009926 #Rosenbaum and Sheppard (1986) from Easotope
+			#a = 1.006028617 from Horita (2014)
 			a = dolo_a18O
 		elif mineral == 'aragonite' or mineral == 'Aragonite':
 			#a = 1.0090901 # Kim (2007)
@@ -348,9 +351,12 @@ def fix_names(df):
 
 	# rename samples based on UID (Rename_by_UID; i.e. whatever the name of 10155 is, change to 'ETH-1')
 	if len(df_rnm) > 0: # check if there's anything to rename
-		for i in range(len(df_rnm)):
+		print(df_rnm)
+		for i in range(len(df_rnm)):			
 			rnm_loc = np.where(df['UID'] == df_rnm['UID'][i])[0] # get index location of particular UID			
 			df.loc[rnm_loc, 'Sample'] = df_rnm.loc[i, 'New_name'] # replace sample name in main df with sample name from rnm_rmv
+		print(df_rnm)
+			
 
 	def change_anchor_name(old, new, d47_low, d47_high, d46_low, d46_high):
 		'''Fixes mistake of labelling IAEA-C1 as IAEA-C2 or vice-versa'''
@@ -379,10 +385,10 @@ def run_D47crunch(run_type):
 
 	data = D47crunch.D47data()
 	data.Nominal_D47 = Nominal_D47
-	data.ALPHA_18O_ACID_REACTION = 1.00871 # From Kim/Oneil 2007 GCA Eq. 3 with 70 deg C rxn temp for calcite	
-	#data.ALPHA_18O_ACID_REACTION = 1.009091 # Reacont
-
-	#values from Bernasconi et al 2018 Table 4
+	data.ALPHA_18O_ACID_REACTION = calc_a18O # From params spreadsheet; same as below, but robust to changes in params. Possible you would want to change this do dolo/arag based on primary mineralogy of your run.
+	#data.ALPHA_18O_ACID_REACTION = 1.00871 # From Kim/Oneil 2007 GCA Eq. 3 with 70 deg C rxn temp for calcite	
+	
+	# values from Bernasconi et al 2018 Table 4
 	if run_type == 'standard':
 		data.SAMPLE_CONSTRAINING_WG_COMPOSITION = ('ETH-1', 2.02, -2.19) # oftentimes for standard racks, we don't use ETH-3, so this uses ETH-1 as the anchor
 	elif run_type == 'clumped':
@@ -403,57 +409,84 @@ def run_D47crunch(run_type):
 	print(output_sep) 
 
 	data.wg()
-	data.crunch()
 
-	if run_type == 'clumped':
-		data.standardize()
-		repeatability_all = data.repeatability['r_D47']
-		rpt_d13C = data.repeatability['r_d13C_VPDB']
-		rpt_d18O = data.repeatability['r_d18O_VSMOW']	
 
-		data.table_of_sessions(verbose = True, print_out = True, dir = results_path, filename = 'sessions.csv', save_to_file = True)
-		data.table_of_samples(verbose = True, print_out = True, dir = results_path, save_to_file = True, filename = 'samples.csv')
-		data.table_of_analyses(print_out = False, dir = results_path, save_to_file = True, filename = 'analyses.csv')
-		#data.plot_sessions(dir = Path.cwd() / 'plots' / 'session_plots') # Issue on everyones computer but Noah's...
+	def crunch_and_standardize(mineral):
 
-		df_rmv = pd.read_excel('params.xlsx', 'Remove')
-		manual_rmv = list(df_rmv.UID)
-		manual_rmv_reason = list(df_rmv.Notes)
+		data.crunch()
 
-		# Create a little dictionary to store info about the project
-		summ_dict = {'n_sessions':n_sess, 'n_samples':n_samp, 'n_analyses':n_anal,
-		'Nominal_D47_ETH-1':data.Nominal_D47['ETH-1'], 'Nominal_D47_ETH-2':data.Nominal_D47['ETH-2'],
-		'Nominal_D47_ETH-3':data.Nominal_D47['ETH-3'], 'Nominal_D47_ETH-4':data.Nominal_D47['ETH-4'],
-		'Nominal_D47_IAEA-C2':data.Nominal_D47['IAEA-C2'], 'Nominal_D47_MERCK':data.Nominal_D47['MERCK'],
-		'Reprod_d13C': rpt_d13C, 'Reprod_d18O':rpt_d18O, 'Reprod_D47':repeatability_all, 'Long_term_SD_threshold':long_term_d47_SD, 
-		'Num_SD_threshold':num_SD, 'Bad_cycles_threshold':bad_count_thresh, 'Transducer_pressure_threshold': transducer_pressure_thresh,
-		'Balance_high_threshold':balance_high,'Balance_low_threshold':balance_low, 'Manually_removed':manual_rmv, 'Manually_removed_reason': manual_rmv_reason}
+		if run_type == 'clumped':
+			data.standardize()
+			repeatability_all = data.repeatability['r_D47']
+			rpt_d13C = data.repeatability['r_d13C_VPDB']
+			rpt_d18O = data.repeatability['r_d18O_VSMOW']
 
-		df_prj_summ = pd.DataFrame([summ_dict], index = [0])
-		# df_prj_summ['Manually_removed'] = df_rmv['UID']
-		# df_prj_summ['Manually_removed_reason'] = df_rmv['Notes']
-		df_prj_summ.to_csv(Path.cwd()/ 'results' / 'project_info.csv', index = False)	
+			sess_file_name = 'sessions_' + mineral + '.csv'
+			samp_file_name = 'samples_' + mineral + '.csv'
+			anal_file_name = 'analyses_' + mineral + '.csv'
 
-		print('Anchors are ', data.Nominal_D47)	# list anchors used and their nominal D47
+			# can make this faster by saving these as variables instead of saving as csv. Will need to rework lots of stuff.
 
-		print(output_sep)
-		for i in rmv_msg: print(i) # print replicates that failed threshold
-		print(output_sep)
+			data.table_of_sessions(verbose = True, print_out = True, dir = results_path, filename = sess_file_name, save_to_file = True)
+			data.table_of_samples(verbose = True, print_out = True, dir = results_path, save_to_file = True, filename = samp_file_name)
+			data.table_of_analyses(print_out = False, dir = results_path, save_to_file = True, filename = anal_file_name)
+			#data.plot_sessions(dir = Path.cwd() / 'plots' / 'session_plots') # Issue on everyones computer but Noah's...
 
-		print('Total # analyses removed = ', len(rmv_meta_list), '(', round((len(rmv_meta_list)/n_anal)*100,1), '% of total)')
+			df_rmv = pd.read_excel('params.xlsx', 'Remove')
+			manual_rmv = list(df_rmv.UID)
+			manual_rmv_reason = list(df_rmv.Notes)
 
-		# For reps that failed, make csv with all parameters they could have failed on
-		df = pd.DataFrame(rmv_meta_list, columns = ['UID', 'Transducer_Pressure', 'Sample_Weight', 'NuCarb_temp', 'Pumpover_Pressure', 'Initial_Sam', 'Balance', 'Vial_Location', 'd13C_SE (Nu)', 'd18O_SE (Nu)', 'D47_SE (Nu)', 'd47_pre_SE', 'd47_post_SE', 'Bad_count', 'Sample'])
-		save_path =  Path.cwd() / 'results' / 'rmv_analyses.csv'
-		df.to_csv(save_path, index = False)
+			# Create a little dictionary to store info about the project
+			summ_dict = {'n_sessions':n_sess, 'n_samples':n_samp, 'n_analyses':n_anal,
+			'Nominal_D47_ETH-1':data.Nominal_D47['ETH-1'], 'Nominal_D47_ETH-2':data.Nominal_D47['ETH-2'],
+			'Nominal_D47_ETH-3':data.Nominal_D47['ETH-3'], 'Nominal_D47_ETH-4':data.Nominal_D47['ETH-4'],
+			'Nominal_D47_IAEA-C2':data.Nominal_D47['IAEA-C2'], 'Nominal_D47_MERCK':data.Nominal_D47['MERCK'],
+			'Reprod_d13C': rpt_d13C, 'Reprod_d18O':rpt_d18O, 'Reprod_D47':repeatability_all, 'Long_term_SD_threshold':long_term_d47_SD, 
+			'Num_SD_threshold':num_SD, 'Bad_cycles_threshold':bad_count_thresh, 'Transducer_pressure_threshold': transducer_pressure_thresh,
+			'Balance_high_threshold':balance_high,'Balance_low_threshold':balance_low, 'Manually_removed':manual_rmv, 'Manually_removed_reason': manual_rmv_reason}
 
-		return repeatability_all
+			df_prj_summ = pd.DataFrame([summ_dict], index = [0])
+			# df_prj_summ['Manually_removed'] = df_rmv['UID']
+			# df_prj_summ['Manually_removed_reason'] = df_rmv['Notes']
+			df_prj_summ.to_csv(Path.cwd()/ 'results' / 'project_info.csv', index = False)	
 
-	# If it's a standard run, use Noah's reworking of Mathieu's code
-	elif run_type == 'standard':
-		table_of_analyses_std(data, print_out = False, dir = results_path, save_to_file = True, filename = 'analyses_bulk.csv')
+			print('Anchors are ', data.Nominal_D47)	# list anchors used and their nominal D47
 
-		return np.nan
+			print(output_sep)
+			for i in rmv_msg: print(i) # print replicates that failed threshold
+			print(output_sep)
+
+			print('Total # analyses removed = ', len(rmv_meta_list), '(', round((len(rmv_meta_list)/n_anal)*100,1), '% of total)')
+
+			# For reps that failed, make csv with all parameters they could have failed on
+			df = pd.DataFrame(rmv_meta_list, columns = ['UID', 'Transducer_Pressure', 'Sample_Weight', 'NuCarb_temp', 'Pumpover_Pressure', 'Initial_Sam', 'Balance', 'Vial_Location', 'd13C_SE (Nu)', 'd18O_SE (Nu)', 'D47_SE (Nu)', 'd47_pre_SE', 'd47_post_SE', 'Bad_count', 'Sample'])
+			save_path =  Path.cwd() / 'results' / 'rmv_analyses.csv'
+			df.to_csv(save_path, index = False)
+
+			return repeatability_all
+
+		# If it's a standard run, use Noah's reworking of Mathieu's code
+		elif run_type == 'standard':
+			table_of_analyses_std(data, print_out = False, dir = results_path, save_to_file = True, filename = 'analyses_bulk.csv')
+
+			return np.nan
+
+	
+	# figure out which mineralogies are being run from params
+	data.ALPHA_18O_ACID_REACTION = calc_a18O # set calcite a18O as default
+
+	for mineral in analyzed_minerals:
+		if mineral == 'Calcite' or mineral == 'calcite' or mineral == 'CALCITE':
+			data.ALPHA_18O_ACID_REACTION = calc_a18O
+		if mineral == 'Dolomite' or mineral == 'dolomite' or mineral == 'DOLOMITE':
+			data.ALPHA_18O_ACID_REACTION = dolo_a18O
+		if mineral == 'Aragonite' or mineral == 'aragonite' or mineral == 'ARAGONITE':
+			data.ALPHA_18O_ACID_REACTION = arag_a18O
+
+		repeatability = crunch_and_standardize(mineral)
+
+	return repeatability
+
 
 def table_of_analyses_std(data, dir = 'results', filename = 'analyses.csv', save_to_file = True, print_out = True):
         '''
@@ -498,16 +531,41 @@ def add_metadata(dir_path, rptability, batch_data_list):
 	INPUT: 
 	OUTPUT:
 	'''
-	
-	file = Path.cwd() / 'results' / 'samples.csv'
-	file_meta = Path.cwd() / 'params.xlsx'
-	
-	df = pd.read_csv(file, encoding = 'latin1')
 
-	if os.path.exists(file_meta):
-		df_meta = pd.read_excel(file_meta, 'Metadata')
-		df = df.merge(df_meta, how = 'left')
+	# first, recombine mineral-specific spreadsheets to make single 'mineral-corrected' sheet
+	df = pd.DataFrame()
+	df_anal = pd.DataFrame()
 
+	for i in analyzed_minerals:
+		print(i)
+		
+		# NB-- MUST have MINERALOGY listed!!
+
+		samp_file_name = 'samples_' + i +'.csv'	
+		anal_file_name = 'analyses_' + i +'.csv'
+
+		file_samp = Path.cwd() / 'results' / samp_file_name
+		file_anal = Path.cwd() / 'results' / anal_file_name
+		file_meta = Path.cwd() / 'params.xlsx'
+		
+		df_samp = pd.read_csv(file_samp, encoding = 'latin1')
+		df_anal = pd.read_csv(file_anal, encoding = 'latin1')
+
+		if os.path.exists(file_meta):
+			df_meta = pd.read_excel(file_meta, 'Metadata')
+			df_samp = df_samp.merge(df_meta, how = 'left')
+			df_anal = df_anal.merge(df_meta, how = 'left')
+
+		min_df = df_samp[df_samp['Mineralogy'] == i]
+		min_df_anal = df_anal[df_anal['Mineralogy'] == i]	
+
+		df = pd.concat([df, min_df])
+		df = df.reset_index(drop = True)
+
+		df_anal = pd.concat([df_anal, min_df_anal])
+		df_anal = df_anal.reset_index(drop = True)
+
+	
 	def calc_meas_95(N):
 		return rptability/np.sqrt(N)
 
@@ -545,9 +603,15 @@ def add_metadata(dir_path, rptability, batch_data_list):
 	T_MIT_95CL_upper_val = df['T_MIT'] + df['T_MIT_95CL_upper']
 	T_MIT_95CL_lower_val = df['T_MIT'] - df['T_MIT_95CL_lower']
 
+	# --- CALCULATE d18O_mineral and d18O_fluid ---
+
+	# Use fractionation factor from Kim and O'Neil 1997 to calculate eps
+
 	eps_KON97 = df['T_MIT'].map(make_water_KON97)
 	eps_KON97_upper = T_MIT_95CL_upper_val.map(make_water_KON97)
 	eps_KON97_lower = T_MIT_95CL_lower_val.map(make_water_KON97)
+
+	# Use fractionation factor from Anderson et al. 2021 to calculate eps
 
 	eps_A21 = df['T_MIT'].map(make_water_A21)
 	eps_A21_upper = T_MIT_95CL_upper_val.map(make_water_A21)
@@ -558,15 +622,17 @@ def add_metadata(dir_path, rptability, batch_data_list):
 	def calc_d18Ow(eps):
 
 		if 'Mineralogy' in df.columns:
-			df['d18O_VPDB_mineral'] = round(((df['d18O_VSMOW'] - list(map(thousandlna, df['Mineralogy']))) - 30.92)/1.03092, 1) # convert from CO2 d18O (VSMOW) to mineral d18O (VPDB)
-			d18Ow_VSMOW = round(df['d18O_VSMOW'] - eps - list(map(thousandlna, df['Mineralogy'])),1) # convert from CO2  d18O VSMOW to water d18O VSMOW
+			df['d18O_VPDB_mineral'] = round(((df['d18O_VSMOW'] - list(map(thousandlna, df['Mineralogy']))) - 30.91)/1.03091, 1) # convert from CO2 d18O (VSMOW) to mineral d18O (VPDB), using 1000lna specified in params
+			d18Ow_VSMOW = round(df['d18O_VSMOW'] - eps - list(map(thousandlna, df['Mineralogy'])),1) # convert from CO2 d18O VSMOW to water d18O VSMOW
 
-		else:
-			df['d18O_VPDB_mineral'] = round(((df['d18O_VSMOW'] - 1000*np.log(1.00871) - 30.92)/1.03092), 1) # convert from CO2 d18O (VSMOW) to calcite d18O (VPDB) if mineralogy not specified
-			d18Ow_VSMOW = round(df['d18O_VSMOW'] - eps - 1000*np.log(1.00871),1) # convert from CO2  d18O VSMOW to water d18O VSMOW using Kim and O'Neil (1997)
+		else: # If mineralogy not specified, default to calcite
+			#df['d18O_VPDB_mineral'] = round(((df['d18O_VSMOW'] - 1000*np.log(1.00871) - 30.91)/1.03091), 1) 
+			df['d18O_VPDB_mineral'] = round(((df['d18O_VSMOW'] - list(map(thousandlna, 'Calcite')) - 30.91)/1.03091), 1) # Same as above line, just robust to changes in params spreadsheet
+			d18Ow_VSMOW = round(df['d18O_VSMOW'] - eps - list(map(thousandlna, 'Calcite')),1)
 
 		return d18Ow_VSMOW
 
+	# Calculate d18Ow for all samples
 	df['d18Ow_VSMOW_KON97'] = calc_d18Ow(eps_KON97)
 	df['d18Ow_VSMOW_KON97_upper'] = round(abs(df['d18Ow_VSMOW_KON97'] - calc_d18Ow(eps_KON97_upper)), 1)
 	df['d18Ow_VSMOW_KON97_lower'] = round(abs(df['d18Ow_VSMOW_KON97'] - calc_d18Ow(eps_KON97_lower)), 1)
@@ -577,7 +643,9 @@ def add_metadata(dir_path, rptability, batch_data_list):
 
 	df.to_csv(Path.cwd() / 'results' / 'summary.csv', index = False)
 
-	df_anal = pd.read_csv(Path.cwd() / 'results' / 'analyses.csv')
+	# Calculate d18O_min and d18Ow for each analysis
+
+	#df_anal = pd.read_csv(Path.cwd() / 'results' / 'analyses.csv')
 	df_batch = pd.DataFrame(batch_data_list, columns = ['UID', 'Transducer_Pressure', 'Sample_Weight', 'NuCarb_temp','Pumpover_Pressure',
 		'Init_Sam_beam', 'Balance', 'Vial_Location', 'd13C_SE (Nu)', 'd18O_SE (Nu)', 'D47_SE (Nu)', 'd47_pre_SE', 'd47_post_SE', 'Bad_Cycles'])
 
@@ -598,10 +666,12 @@ def add_metadata(dir_path, rptability, batch_data_list):
 		df_anal['d18O_water_VSMOW_A21'] = round(df_anal['d18O_VSMOW'] - eps_A21 - 1000*np.log(1.00871),1) # convert from CO2  d18O VSMOW to water d18O VSMOW
 		
 
-	df_anal = df_anal.merge(df_meta, how = 'left', on = 'Sample')
+	#df_anal = df_anal.merge(df_meta, how = 'left', on = 'Sample')
 	df_anal = df_anal.merge(df_batch, how = 'left', on = 'UID')
 
-	eth_loc = np.where(df_anal['Sample'] == 'ETH-4')	
+	# Calculate percent evolved carbonate
+
+	eth_loc = np.where(df_anal['Sample'] == 'ETH-4') # Can be set to any sample name that exists in the batch; assumes 100% carbonate for this sample	
 	mbar_mg_eth = (df_anal['Transducer_Pressure'].iloc[eth_loc] / df_anal['Sample_Weight'].iloc[eth_loc]).median()
 	df_anal['pct_evolved_carbonate'] = round(((df_anal['Transducer_Pressure'] / df_anal['Sample_Weight']) / mbar_mg_eth)*100, 1)
 
