@@ -1,5 +1,4 @@
-# --- VERSION 0.1.4 BETA updated 20220131 by NTA ---
-
+# --- VERSION 0.1.3 updated 20211101 by NTA ---
 
 
 import os
@@ -78,7 +77,7 @@ rptability = b_s.run_D47crunch(run_type)
 if run_type == 'clumped':
 	b_s.add_metadata(results_path, rptability, batch_data_list)
 	print(output_sep)
-	print('Repeatability for all samples is ', round(rptability, 4)*1000, 'ppm' )
+	print('Repeatability for all samples is ', round(rptability, 3)*1000, 'ppm' )
 	print(output_sep)
 
 	b_s.plot_ETH_D47(rptability)
