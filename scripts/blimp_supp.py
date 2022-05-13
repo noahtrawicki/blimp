@@ -1,4 +1,4 @@
-# --- VERSION 0.1.3 updated 20211101 by NTA ---
+# --- VERSION 0.1.4 updated 20220513 by NTA ---
 
 import pandas as pd
 import numpy as np
@@ -61,9 +61,9 @@ def calc_bern_temp(D47_value):
 	return (((0.0449 * 1000000) / (D47_value - 0.167))**0.5) - 273.15
 
 def calc_MIT_temp(D47_value):
-	''' Calculates D47 temp using preliminary calibration from Anderson et al. (2020) 90C'''
+	''' Calculates D47 temp using Eq. 1 calibration from Anderson et al. (2021) 90C'''
 	if D47_value > 0.153: #(prevents complex returns)
-		return (((0.039 * 1000000) / (D47_value - 0.153))**0.5) - 273.15
+		return (((0.0391 * 1000000) / (D47_value - 0.154))**0.5) - 273.15
 	else:
 		return np.nan
 
@@ -379,8 +379,7 @@ def run_D47crunch(run_type):
 
 	data = D47crunch.D47data()
 	data.Nominal_D47 = Nominal_D47
-	data.ALPHA_18O_ACID_REACTION = 1.00871 # From Kim/Oneil 2007 GCA Eq. 3 with 70 deg C rxn temp for calcite	
-	#data.ALPHA_18O_ACID_REACTION = 1.009091 # Reacont
+	data.ALPHA_18O_ACID_REACTION = calc_a18O # This is selected from the params file -- you can use whatever value you want in there.
 
 	#values from Bernasconi et al 2018 Table 4
 	if run_type == 'standard':
@@ -512,8 +511,9 @@ def add_metadata(dir_path, rptability, batch_data_list):
 		return rptability/np.sqrt(N)
 
 	df['95% CL'] = df['95% CL'].str[2:]
-	df['95% CL analysis'] = list(map(calc_meas_95, df['N']))
-	df['95% CL analysis'] = round(df['95% CL analysis'], 4)
+	df = df.rename(columns = {'95% CL': 'CL_95_pct'})
+	df['CL_95_pct_analysis'] = list(map(calc_meas_95, df['N']))
+	df['CL_95_pct_analysis'] = round(df['CL_95_pct_analysis'], 4)
 
 	# Calc Bernasconi et al. (2018) temperature; I wouldn't recommend using this unless you also change the nominal D47 values of the anchors to Bern 2018 values
 	#df['Bern_2018_temp'] = round(df['D47'].map(calc_bern_temp), 2)
@@ -521,14 +521,14 @@ def add_metadata(dir_path, rptability, batch_data_list):
 	# Calc Anderson et al. (2021) temperature
 	df['T_MIT'] = df['D47'].map(calc_MIT_temp)
 	
-	df['95% CL'] = df['95% CL'].astype('float64')
+	df['CL_95_pct'] = df['CL_95_pct'].astype('float64')
 	df['SE'] = df['SE'].astype('float64')
 
 	# Calculate upper and lower 95 CL temperatures (as the 'magnitude' of the error bar -- so 20 C sample with 10 C upper 95CL = 30 C upper 95 CL value)
-	T_MIT_95CL_lower = df['D47'] + df['95% CL']
+	T_MIT_95CL_lower = df['D47'] + df['CL_95_pct']
 	df['T_MIT_95CL_lower'] = round(abs(df['T_MIT'] - T_MIT_95CL_lower.map(calc_MIT_temp)), 1)
 
-	T_MIT_95CL_upper = df['D47'] - df['95% CL']
+	T_MIT_95CL_upper = df['D47'] - df['CL_95_pct']
 	df['T_MIT_95CL_upper'] = round(abs(df['T_MIT'] - T_MIT_95CL_upper.map(calc_MIT_temp)), 1)
 
 	T_MIT_SE_lower = df['D47'] + df['SE']
@@ -606,6 +606,7 @@ def add_metadata(dir_path, rptability, batch_data_list):
 	df_anal['pct_evolved_carbonate'] = round(((df_anal['Transducer_Pressure'] / df_anal['Sample_Weight']) / mbar_mg_eth)*100, 1)
 
 	df_anal.to_csv(Path.cwd() / 'results' / 'analyses.csv', index = False)
+	to_earthchem(df_anal)
 
 	os.chdir(dir_path)
 
@@ -625,6 +626,80 @@ def add_metadata_std():
 		df_anal['d18O_VPDB_mineral'] = round(((df_anal['d18O_VSMOW'] - 1000*np.log(1.00871) - 30.92)/1.03092), 1) # convert from CO2 d18O (VSMOW) to calcite d18O (VPDB) if mineralogy not specified
 
 	df_anal.to_csv(Path.cwd() / 'results' / 'analyses_bulk.csv', index = False)
+	
+
+def to_earthchem(df_a):
+	''' Formats analyses in format used for the EarthChem database'''
+
+	df_ec = pd.DataFrame()
+
+	df_ec['SampName'] = df_a['Sample']
+
+	df_ec['SampCategory'] = 'null'
+	df_ec['SampSubCategory'] = 'null'
+	df_ec['SampNum'] = 'NA'
+	df_ec['Mineralogy'] = df_a['Mineralogy']
+	df_ec['Date'] = df_a['Session']
+	df_ec['AnalysisID'] = df_a['UID']
+	df_ec['RefYN'] = 'NA'
+	df_ec['D47TE_SG_WD'] = 'NA'
+	df_ec['MassSpec'] = 'Nu Perspective'
+	# df_ec['FormT'] = df_a['Form_T']
+	# df_ec['erFormT'] = df_a['err_Form_T']
+	df_ec['rxnTemp'] = 70
+	df_ec['Bad'] = 0
+
+	for i in range(len(df_a['Sample'])):
+		this = df_a['Sample'][i] 
+		if this == 'ETH-1' or this == 'ETH-2' or this == 'ETH-3' or this == 'ETH-4' or this == 'MERCK' or this == 'IAEA-C1' or this == 'IAEA-C2':
+			df_ec['SampCategory'][i] = 'carbSTD'
+			df_ec['SampSubCategory'][i] = this
+			if this != 'IAEA-C1':
+				df_ec['RefYN'][i] = 'Y'
+			else:
+				df_ec['RefYN'][i] = 'N'
+			if this == 'ETH-1':
+				df_ec['D47TE_SG_WD'][i] = 0.2052
+			if this == 'ETH-2':
+				df_ec['D47TE_SG_WD'][i] = 0.2085
+			if this == 'ETH-3':
+				df_ec['D47TE_SG_WD'][i] = 0.6132
+			if this == 'ETH-4':
+				df_ec['D47TE_SG_WD'][i] = 0.4505
+			if this == 'IAEA-C2':
+				df_ec['D47TE_SG_WD'][i] = 0.6409
+			if this == 'MERCK':
+				df_ec['D47TE_SG_WD'][i] = 0.5135
+
+		else:
+			
+			df_ec['SampCategory'][i] = 'sample'
+			# NB need subcategory for non-standards
+			#df_ec['SampSubCategory'][i] = df_a['Method'][i]
+			df_ec['RefYN'][i] = 'N'
+			df_ec['D47TE_SG_WD'][i] = 'NA'
+
+	df_ec['AFF_WD'] = 'NA'
+	df_ec['ARF_ID1'] = df_a['Session']
+	df_ec['d45'] = df_a['d45']
+	df_ec['d46'] = df_a['d46']
+	df_ec['d47'] = df_a['d47']
+	df_ec['d48'] = df_a['d48']
+	df_ec['d49'] = df_a['d49']
+	df_ec['d13C_wg_VPDB'] = df_a['d13Cwg_VPDB']
+	df_ec['d18O_wg_VSMOW'] = df_a['d18Owg_VSMOW']
+	df_ec['BRd13C'] = df_a['d13C_VPDB']
+	df_ec['BRd18O'] = df_a['d18O_VSMOW']
+	df_ec['BRD47'] = df_a['D47raw']
+	df_ec['BRD48'] = df_a['D48raw']
+	df_ec['BRD49'] = df_a['D49raw']
+	df_ec['BRSlopeEGL'] = 'NA'
+	df_ec['BRSlopeETF_WD'] = 'NA'
+	df_ec['BRIntETF_WD'] = 'NA'
+	df_ec['BRD47rfac_P_newAFF'] = df_a['D47']
+	df_ec['d18Oac'] = 'NA' #df_a['d18O_mineral_VPDB']
+
+	df_ec.to_csv(Path.cwd() / 'results' / 'analyses_earthchem_fmt.csv', index = False)
 
 # ---- MAKE PLOTS ----
 
