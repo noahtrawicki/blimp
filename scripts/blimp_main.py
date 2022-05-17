@@ -1,4 +1,4 @@
-# --- VERSION 0.1.4 updated 20220513 by NTA ---
+# --- VERSION 0.1.5 updated 20220517 by NTA ---
 
 
 import os
@@ -55,8 +55,8 @@ if os.path.isdir(rd_path): # If there is a raw data folder...
 				if 'Data' in file and '.txt' in file and '.fail' not in file:
 					file_path = rd_path / folder / file					
 					if os.path.getsize(file_path) > 225000 or run_type == 'standard':	# Make sure .txt file is complete					
-						file_n = int(file[5:10])
-						samp_name = str(file[10:-4])
+						file_n = int(file[5:10]) # get UID from file name
+						samp_name = str(file[10:-4]) # get sample number from file name
 						if file_n not in manual_rmv:
 							lil_d, batch_data = b_s.read_Nu_data(file_path, file_n, samp_name, folder, run_type)						
 							if lil_d != None:		
@@ -72,19 +72,21 @@ df_d47 = pd.DataFrame(d47_crunch_fmt, columns = ['UID', 'Session', 'Sample', 'd4
 b_s.fix_names(df_d47)
 
 print('Run type:', run_type)
-rptability = b_s.run_D47crunch(run_type)
+df_sam, df_analy, rptability = b_s.run_D47crunch(run_type)
 
 if run_type == 'clumped':
-	b_s.add_metadata(results_path, rptability, batch_data_list)
+	b_s.add_metadata(results_path, rptability, batch_data_list, df_sam, df_analy)
 	print(output_sep)
 	print('Repeatability for all samples is ', round(rptability, 3)*1000, 'ppm' )
 	print(output_sep)
 
-	b_s.plot_ETH_D47(rptability)
+	df = pd.read_csv(Path.cwd().parents[0]/ 'results' / 'analyses.csv')
+
+	b_s.plot_ETH_D47(rptability, df)	
+	b_s.cdv_plots(df)
+	b_s.d47_D47_plot(df)
+	b_s.interactive_plots(df)
 	b_s.joy_plot()
-	b_s.cdv_plots()
-	b_s.d47_D47_plot()
-	# b_s.d47_D47_plot_bokeh()
 
 elif run_type == 'standard':
 	b_s.add_metadata_std()
