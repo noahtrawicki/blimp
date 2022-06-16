@@ -21,6 +21,5 @@ Blimp has been tested on Nu Stable versions 1.69.5, 1.71.2, and 1.71.5. For now,
 7. Navigate to the '.../blimp/scripts' folder ('cd scripts').
 8. Run blimp by typing 'python blimp_main.py' in your Anaconda Command Prompt. Blimp will take ~20 seconds -- 2 min to run, depending on how many analyses are processed and your machine.
 9. Find processed data in 'results' folder and plots in 'plots' folder.
-10. 
 
 If you want a LATEX file/pdf with a summary of key results and plots, talk to Noah -- you will need to install (at least) pdflatex, Perl, and a LATEX interpreter.
