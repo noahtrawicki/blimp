@@ -1,4 +1,4 @@
-# --- VERSION 0.1.5 updated 20220517 by NTA ---
+# --- VERSION 0.1.6 updated 20220517 by NTA ---
 
 
 import os
@@ -7,7 +7,7 @@ import pandas as pd
 from pathlib import Path
 #import make_pdf as mk_pdf
 
-output_sep = '--------------'
+output_sep = '------------------------'
 
 print(output_sep)
 
@@ -72,12 +72,18 @@ df_d47 = pd.DataFrame(d47_crunch_fmt, columns = ['UID', 'Session', 'Sample', 'd4
 b_s.fix_names(df_d47)
 
 print('Run type:', run_type)
-df_sam, df_analy, rptability = b_s.run_D47crunch(run_type)
+raw_deltas_file = Path.cwd() / 'results' / 'raw_deltas.csv'
+
+df_sam, df_analy, rptability = b_s.run_D47crunch(run_type, raw_deltas_file)
 
 if run_type == 'clumped':
+	print('Adding sample metadata...')
+	print(output_sep)
 	b_s.add_metadata(results_path, rptability, batch_data_list, df_sam, df_analy)
 	print(output_sep)
 	print('Repeatability for all samples is ', round(rptability, 3)*1000, 'ppm' )
+	print(output_sep)
+	print('Data processing complete. Working on plots...')
 	print(output_sep)
 
 	df = pd.read_csv(Path.cwd().parents[0]/ 'results' / 'analyses.csv')

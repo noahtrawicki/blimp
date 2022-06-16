@@ -1,4 +1,4 @@
-# --- VERSION 0.1.5 updated 20220517 by NTA ---
+# --- VERSION 0.1.6 updated 20220616 by NTA ---
 
 import pandas as pd
 import numpy as np
@@ -7,8 +7,6 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import seaborn as sns
 import time
-
-
 
 # ---- INITIALIZE VARIABLES ----
 lil_del_dict_eth3 = []
@@ -31,8 +29,11 @@ sns.set_palette("colorblind")
 pal = sns.color_palette()
 medium_font = 10
 plt.rc('axes', labelsize=medium_font, labelweight = 'bold')
+plt.rcParams['font.family'] = 'Arial'
 plt.rcParams['xtick.direction'] = 'in'
 plt.rcParams['ytick.direction'] = 'in'
+# plt.rcParams['font.family'] = 'sans-serif'
+# plt.rcParams['font.sans-serif'] = ['Arial']
 
 # ---- READ IN PARAMETERS ('params.xlsx') ----
 
@@ -72,7 +73,7 @@ def calc_bern_temp(D47_value):
 
 def calc_MIT_temp(D47_value):
 	''' Calculates D47 temp using Eq. 1 calibration from Anderson et al. (2021) 90C'''
-	if D47_value > 0.153: #(prevents complex returns)
+	if D47_value > 0.15401: #(prevents complex returns from negative square root)
 		return (((0.0391 * 1000000) / (D47_value - 0.154))**0.5) - 273.15
 	else:
 		return np.nan
@@ -112,6 +113,20 @@ def thousandlna(mineral):
 			a = calc_a18O
 			
 		return 1000*np.log(a)
+
+def calc_residual(df_analy):
+	unique_samples = pd.unique(df_analy['Sample'])
+	df_samp_mean = df_analy.groupby(['Sample'], as_index = False).mean() # create df of avg values for each sample
+	pct_evolved_carb = df_samp_mean['pct_evolved_carbonate']
+	resid = []
+
+	for i in range(len(df_analy)):
+		samp = df_analy['Sample'].iloc[i]
+		samp_mean = df_samp_mean['D47'].loc[df_samp_mean['Sample'] == samp]
+		resid.append((df_analy['D47'].iloc[i] - samp_mean).iloc[0])
+
+	return pct_evolved_carb, resid
+
 
 # ---- Define helper functions ----
 
@@ -266,7 +281,7 @@ def read_Nu_data(data_file, file_number, current_sample, folder_name, run_type):
 			df_results_summ.columns = df_results_summ.columns.map('_'.join).str.strip()	# fixes weird headers of Nu Summary files
 
 			#Get the index location of the row that corresponds to the given file number (i.e. replicate)
-			curr_row = df_results_summ.loc[df_results_summ['Data_File'].str.contains(str(file_number))].index
+			curr_row = df_results_summ.loc[df_results_summ['Data_File'].str.contains(str(file_number), na = False)].index
 			batch_data_list = [file_number, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, d47_pre_SE, d47_post_SE, bad_count]
 			if len(curr_row) == 1 and run_type == 'clumped': # curr_row is Int64Index, which acts like a list. If prev line finds either 0 or 2 matching lines, it will skip this section.
 				transduc_press = float(df_results_summ['Transducer_Pressure'][curr_row])				
@@ -351,18 +366,27 @@ def fix_names(df):
 	df.to_csv(dir_path_fixed, index = False)
 
 
-def run_D47crunch(run_type):
+def run_D47crunch(run_type, raw_deltas_file):
 	''' 
 	PURPOSE: Calculate D47, d13C, d18O, using Mathieu Daeron's 'D47_crunch' package (https://github.com/mdaeron/D47crunch)	
 	INPUT: Fully corrected little deltas ('raw_deltas.csv')
 	OUTPUT: repeatability (1SD) of all calculated measurements; also writes 'sessions.csv', 'analyses.csv', and 'samples.csv',
 	  '''
 	import D47crunch
+
+	print('Sent to D47crunch. Prrocessing...')
 	
 	results_path = Path.cwd() / 'results'
 
+	xls = pd.ExcelFile(Path.cwd() / 'params.xlsx')
+	df_anc = pd.read_excel(xls, 'Anchors', index_col = 'Anchor')
+	Nominal_D47 = df_anc.to_dict()['D47'] # Sets anchor values for D47crunch as dictionary {Anchor: value}
+
+
 	data = D47crunch.D47data()
 	data.Nominal_D47 = Nominal_D47
+
+	print('Anchors are ', data.Nominal_D47)	# list anchors used and their nominal D47
 	data.ALPHA_18O_ACID_REACTION = calc_a18O # This is selected from the params file -- you can use whatever value you want in there.
 
 	#values from Bernasconi et al 2018 Table 4
@@ -372,7 +396,8 @@ def run_D47crunch(run_type):
 		data.SAMPLE_CONSTRAINING_WG_COMPOSITION = ('ETH-3', 1.71, -1.78)
 
 	print('Sample constraining WG composition = ', data.SAMPLE_CONSTRAINING_WG_COMPOSITION)
-	data.read(Path.cwd() / 'results' / 'raw_deltas.csv') # INPUT	
+	#data.read(Path.cwd() / 'results' / raw_deltas_file) # INPUT
+	data.read(raw_deltas_file) # INPUT	
 
 	n_anal = len(data)
 	n_samp = len({r["Sample"] for r in data})
@@ -397,8 +422,8 @@ def run_D47crunch(run_type):
 		# display and save session info as csv
 		data.table_of_sessions(verbose = True, print_out = True, dir = results_path, filename = 'sessions.csv', save_to_file = True)
 		
-		sam = data.table_of_samples(verbose = True, print_out = True, save_to_file = False)
-		analy = data.table_of_analyses(print_out = False, save_to_file = False)
+		sam = data.table_of_samples(verbose = True, print_out = True, save_to_file = False, output = 'raw')
+		analy = data.table_of_analyses(print_out = False, save_to_file = False, output = 'raw')
 		#data.plot_sessions(dir = Path.cwd() / 'plots' / 'session_plots') # Issue on everyones computer but Noah's...
 
 		# send sample and analyses to pandas dataframe, clean up
@@ -438,13 +463,14 @@ def run_D47crunch(run_type):
 		for i in rmv_msg: print(i) # print replicates that failed threshold
 		print(output_sep)
 
-		print('Total # analyses removed = ', len(rmv_meta_list), '(', round((len(rmv_meta_list)/n_anal)*100,1), '% of total)')
+		print('Total # analyses removed automatically = ', len(rmv_meta_list), '(', round((len(rmv_meta_list)/n_anal)*100,1), '% of total)')
 
 		# For reps that failed, make csv with all parameters they could have failed on
 		df = pd.DataFrame(rmv_meta_list, columns = ['UID', 'Transducer_Pressure', 'Sample_Weight', 'NuCarb_temp', 'Pumpover_Pressure', 'Initial_Sam', 'Balance', 'Vial_Location', 'd13C_SE (Nu)', 'd18O_SE (Nu)', 'D47_SE (Nu)', 'd47_pre_SE', 'd47_post_SE', 'Bad_count', 'Sample'])
 		save_path =  Path.cwd() / 'results' / 'rmv_analyses.csv'
 		df.to_csv(save_path, index = False)
 
+		
 		return df_sam, df_analy, repeatability_all
 
 	# If it's a standard run, use Noah's reworking of Mathieu's code
@@ -567,7 +593,7 @@ def add_metadata(dir_path, rptability, batch_data_list, df, df_anal):
 	df['d18Ow_VSMOW_A21_upper'] = round(abs(df['d18Ow_VSMOW_A21'] - calc_d18Ow(eps_A21_upper)), 1)
 	df['d18Ow_VSMOW_A21_lower'] = round(abs(df['d18Ow_VSMOW_A21'] - calc_d18Ow(eps_A21_lower)), 1)
 
-	df.to_csv(Path.cwd() / 'results' / 'summary.csv', index = False)
+	
 
 	df_batch = pd.DataFrame(batch_data_list, columns = ['UID', 'Transducer_Pressure', 'Sample_Weight', 'NuCarb_temp','Pumpover_Pressure',
 		'Init_Sam_beam', 'Balance', 'Vial_Location', 'd13C_SE (Nu)', 'd18O_SE (Nu)', 'D47_SE (Nu)', 'd47_pre_SE', 'd47_post_SE', 'Bad_Cycles'])
@@ -595,9 +621,14 @@ def add_metadata(dir_path, rptability, batch_data_list, df, df_anal):
 	print('Total # bad cycles removed = ', n_bad_cycles, '(', round((n_bad_cycles/(len(df_anal)*60))*100, 2), '%)') # does not include bad cycles from disabled reps
 
 	eth_loc = np.where(df_anal['Sample'] == 'ETH-4')	
-	mbar_mg_eth = (df_anal['Transducer_Pressure'].iloc[eth_loc] / df_anal['Sample_Weight'].iloc[eth_loc]).median()
+	mbar_mg_eth = (df_anal['Transducer_Pressure'].iloc[eth_loc] / df_anal['Sample_Weight'].iloc[eth_loc]).mean()
 	df_anal['pct_evolved_carbonate'] = round(((df_anal['Transducer_Pressure'] / df_anal['Sample_Weight']) / mbar_mg_eth)*100, 1)
 
+	mean_pct_carb, resid = calc_residual(df_anal)
+	df_anal['D47_residual'] = resid
+	df['mean_pct_carb'] = round(mean_pct_carb,1)
+
+	df.to_csv(Path.cwd() / 'results' / 'summary.csv', index = False)
 	df_anal.to_csv(Path.cwd() / 'results' / 'analyses.csv', index = False)
 	to_earthchem(df_anal)
 
@@ -698,6 +729,7 @@ def to_earthchem(df_a):
 	df_ec.to_csv(Path.cwd() / 'results' / 'analyses_earthchem_fmt.csv', index = False)
 
 # ---- MAKE PLOTS ----
+
 
 def plot_ETH_D47(repeatability_all, df):
 
@@ -958,14 +990,15 @@ def interactive_plots(df):
 		
 	except ModuleNotFoundError:
 		print("Bokeh package not found. Install Bokeh for interactive plots.")
+		return
 
 # put this in try/except clause
 	#df = pd.read_csv(Path.cwd().parents[0] / 'results' / 'analyses.csv')
 	output_file(filename="D47_d47_interactive.html", title="D47_d47_interactive")
 
 	df_anchor = df.loc[(df['Sample'] == 'ETH-1') | (df['Sample'] == 'ETH-2') | 
-	(df['Sample'] == 'ETH-3') | (df['Sample'] == 'ETH-4') | (df['Sample'] == 'IAEA-C2') 
-	| (df['Sample'] == 'MERCK')]
+				(df['Sample'] == 'ETH-3') | (df['Sample'] == 'ETH-4') | (df['Sample'] == 'IAEA-C2') 
+				| (df['Sample'] == 'MERCK')]
 
 	data_anchors = ColumnDataSource.from_df(df_anchor)
 	data_analyses = ColumnDataSource.from_df(df)
@@ -988,6 +1021,8 @@ def interactive_plots(df):
 	
 	save(f1)
 
+	# --- D47_all_interactive ----
+
 	output_file(filename="D47_all_interactive.html", title="D47_all_interactive")
 
 	sample_names = pd.unique(df['Sample'])
@@ -995,8 +1030,30 @@ def interactive_plots(df):
 	std_tools = ['pan,wheel_zoom,box_zoom,reset,hover']
 	f2 = figure(x_axis_label = 'D47', y_axis_label = 'Sample', y_range = sample_names, tools = std_tools, tooltips = TOOLTIPS)
 	f2.circle(x = 'D47', y=jitter('Sample', width=0.1, range=f2.y_range), source = data_analyses, color = 'white', line_color = 'black', size = 7)
-	
+
 	save(f2)
+
+	# --- D47_raw_nominal_interactive ---
+
+	output_file(filename="D47_raw_nominal_interactive.html", title="D47_raw_nominal_interactive")
+	TOOLTIPS = [("Sample name", "@Sample"), ("UID", "@UID"), ("d13C", "@d13C_VPDB"), ("d18O_mineral", "@d18O_VPDB_mineral"), ("Vial_Location", "@Vial_Location")]
+	std_tools = ['pan,wheel_zoom,box_zoom,reset,hover']
+
+	df_anchor = df_anchor.reset_index(drop = True)
+	f3 = figure(x_axis_label = 'UID', y_axis_label = 'D47raw-nominal', tools = std_tools, tooltips = TOOLTIPS)
+
+	# for j in range(len(df_anchor)):
+	# 	if df_anchor['Sample'][j] == 'ETH-1': col, nom_D47 = pal[0], Nominal_D47['ETH-1']
+	# 	if df_anchor['Sample'][j] == 'ETH-2': col, nom_D47 = pal[1], Nominal_D47['ETH-2']
+	# 	if df_anchor['Sample'][j] == 'ETH-3': col, nom_D47 = pal[2], Nominal_D47['ETH-3']
+	# 	if df_anchor['Sample'][j] == 'ETH-4': col, nom_D47 = pal[3], Nominal_D47['ETH-4']
+	# 	if df_anchor['Sample'][j] == 'IAEA-C2': col, nom_D47 = pal[4], Nominal_D47['IAEA-C2']
+	# 	if df_anchor['Sample'][j] == 'MERCK': col, nom_D47 = pal[5], Nominal_D47['MERCK']
+
+	f3.scatter('UID', 'D47', source = data_anchors, color = 'black')
+	save(f3)
+					
+		#ax.scatter(df_anchor['UID'][j], df_anchor['D47raw'][j] - nom_D47, color = col, alpha = 1, edgecolor = 'black')
 
 
 def joy_plot():

@@ -1,0 +1,18 @@
+name: blimp-env
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python>3.8
+  - pip
+  - openpyxl
+  - numpy
+  - scipy
+  - pathlib
+  - matplotlib
+  - seaborn
+  - bokeh
+  - mscorefonts
+  - pip:
+    - D47crunch==2.0.3
+prefix: C:\Users\noaha\miniconda3\envs\blimp-env
