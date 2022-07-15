@@ -12,6 +12,7 @@ dependencies:
   - matplotlib
   - seaborn
   - bokeh
+  - pandas
   - mscorefonts
   - pip:
     - D47crunch==2.0.3
