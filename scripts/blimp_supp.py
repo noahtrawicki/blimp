@@ -172,10 +172,14 @@ def read_Nu_data(data_file, file_number, current_sample, folder_name, run_type):
 	df = df[(df.T != 0).any()] # remove all zeroes; https://stackoverflow.com/questions/22649693/drop-rows-with-all-zeros-in-pandas-data-frame	
 	df = df.reset_index(drop = 'True')
 
-	if len(df) != 744: # valid Nu results files should have 744 lines (at least as currently written); this will skip any files that violate that criteria
-		print("Input file ", data_file, "is incomplete or incorrectly formatted; it has been skipped.")
-		data_list = [file_number, session, current_sample, np.nan, np.nan, np.nan, np.nan, np.nan]
-		return None, None
+	if len(df) != 744: # valid Nu results files should have 744 lines (at least as currently written); this will skip any files that violate that criteria.
+		if len(df) != 990: # MAYBE bellows run, e.g. 20170227 ABJ
+			print("Input file ", data_file, "is incomplete or incorrectly formatted; it has been skipped.")
+			data_list = [file_number, session, current_sample, np.nan, np.nan, np.nan, np.nan, np.nan]
+			return None, None
+		else:
+			print('Detected potential bellows analysis. Raw data will be truncated to 3 blocks.')
+
 
 	# -- Read in blank i.e. zero measurement -- 
 	df_zero = df.head(6).astype('float64') # first 6 rows are the "Blank" i.e. zero measurement; used to zero-correct entire replicate
@@ -300,13 +304,13 @@ def read_Nu_data(data_file, file_number, current_sample, folder_name, run_type):
 				# Remove any replicates that fail thresholds, compile a message that will be written to the terminal
 				if transduc_press < transducer_pressure_thresh:
 					rmv_analyses.append(file_number)
-					rmv_msg.append((str(rmv_analyses[0]) + str(current_sample) + ' failed transducer pressure requirements (transducer_pressure = ' + str(round(transduc_press,1)) + ')' ))
+					rmv_msg.append((str(rmv_analyses[0]) + ' ' + str(current_sample) + ' failed transducer pressure requirements (transducer_pressure = ' + str(round(transduc_press,1)) + ')' ))
 				if balance > balance_high or balance < balance_low:
 					rmv_analyses.append(file_number)
-					rmv_msg.append((str(rmv_analyses[0]) + str(current_sample) + ' failed balance requirements (balance = ' +  str(round(balance,1)) + ')'))
+					rmv_msg.append((str(rmv_analyses[0]) + ' ' + str(current_sample) + ' failed balance requirements (balance = ' +  str(round(balance,1)) + ')'))
 				if bad_count > bad_count_thresh:
 					rmv_analyses.append(file_number)
-					rmv_msg.append((str(rmv_analyses[0]) + str(current_sample) + ' failed cycle-level reproducibility requirements (bad cycles = ' + str(bad_count) + ')'))
+					rmv_msg.append((str(rmv_analyses[0]) + ' ' + str(current_sample) + ' failed cycle-level reproducibility requirements (bad cycles = ' + str(bad_count) + ')'))
 
 			break # Found a matching file? There only should be one, so stop here.
 
@@ -470,7 +474,7 @@ def run_D47crunch(run_type, raw_deltas_file):
 		save_path =  Path.cwd() / 'results' / 'rmv_analyses.csv'
 		df.to_csv(save_path, index = False)
 
-		
+
 		return df_sam, df_analy, repeatability_all
 
 	# If it's a standard run, use Noah's reworking of Mathieu's code
