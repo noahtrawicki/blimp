@@ -57,14 +57,7 @@ dolo_a18O = df_const['Value'].loc['dolo_a18O']
 
 Nominal_D47 = df_anc.to_dict()['D47'] # Sets anchor values for D47crunch as dictionary {Anchor: value}
 
-# Every 6th entry is a particular mass, starting with mass 49. Starts at 6 to avoid zero measurements. 
-# Used in 'read_Nu_data' function but defining here to avoid looping over definitions
-mass_49_index = np.arange(6, 744, 6) 
-mass_48_index = np.arange(7, 744, 6)
-mass_47_index = np.arange(8, 744, 6)
-mass_46_index = np.arange(9, 744, 6)
-mass_45_index = np.arange(10, 744, 6)
-mass_44_index = np.arange(11, 744, 6)
+
 # ---- DEFINE FUNCTIONS USED TO CALCULATE D47/T/D18Ow ----
 
 def calc_bern_temp(D47_value):
@@ -172,7 +165,7 @@ def read_Nu_data(data_file, file_number, current_sample, folder_name, run_type):
 	df = df[(df.T != 0).any()] # remove all zeroes; https://stackoverflow.com/questions/22649693/drop-rows-with-all-zeros-in-pandas-data-frame	
 	df = df.reset_index(drop = 'True')
 
-	if len(df) != 744: # valid Nu results files should have 744 lines (at least as currently written); this will skip any files that violate that criteria.
+	if len(df) != 744 and run_type != 'standard': # valid Nu results files should have 744 lines (at least as currently written); this will skip any files that violate that criteria.
 		if len(df) != 990: # MAYBE bellows run, e.g. 20170227 ABJ
 			print("Input file ", data_file, "is incomplete or incorrectly formatted; it has been skipped.")
 			data_list = [file_number, session, current_sample, np.nan, np.nan, np.nan, np.nan, np.nan]
@@ -185,6 +178,15 @@ def read_Nu_data(data_file, file_number, current_sample, folder_name, run_type):
 	df_zero = df.head(6).astype('float64') # first 6 rows are the "Blank" i.e. zero measurement; used to zero-correct entire replicate
 	df_zero_mean = (df_zero.apply(np.mean, axis = 1)).round(21) # calculates mean of zero for each mass
 	df_mean = df.mean(axis = 1)	# calculates the mean of each row (i.e., averages each individual measurement to calculate a cycle mean) 
+
+	# Every 6th entry is a particular mass, starting with mass 49. Starts at 6 to avoid zero measurements. 
+	# Used in 'read_Nu_data' function but defining here to avoid looping over definitions
+	mass_49_index = np.arange(6, len(df), 6) 
+	mass_48_index = np.arange(7, len(df), 6)
+	mass_47_index = np.arange(8, len(df), 6)
+	mass_46_index = np.arange(9, len(df), 6)
+	mass_45_index = np.arange(10, len(df), 6)
+	mass_44_index = np.arange(11, len(df), 6)
 
 	# -- Calculate R values --
 
@@ -205,10 +207,11 @@ def read_Nu_data(data_file, file_number, current_sample, folder_name, run_type):
 	lil_del = []
 
 	# if clumped run, index locations of all sample side cycles are defined at top of script so they are not redefined with every analysis
-	sam_b1_idx = np.linspace(1, 39, 20, dtype = int)
-	sam_b2_idx = np.linspace(42, 80, 20, dtype = int)
-	sam_b3_idx = np.linspace(83, 121, 20, dtype = int)
-	sam_idx = np.concatenate([sam_b1_idx, sam_b2_idx, sam_b3_idx])
+	if run_type == 'clumped':
+		sam_b1_idx = np.linspace(1, 39, 20, dtype = int)
+		sam_b2_idx = np.linspace(42, 80, 20, dtype = int)
+		sam_b3_idx = np.linspace(83, 121, 20, dtype = int)
+		sam_idx = np.concatenate([sam_b1_idx, sam_b2_idx, sam_b3_idx])
 
 	# if standard run, index locations of sample side cycles are different
 	if run_type == 'standard':
@@ -394,10 +397,10 @@ def run_D47crunch(run_type, raw_deltas_file):
 	data.ALPHA_18O_ACID_REACTION = calc_a18O # This is selected from the params file -- you can use whatever value you want in there.
 
 	#values from Bernasconi et al 2018 Table 4
-	if run_type == 'standard':
-		data.SAMPLE_CONSTRAINING_WG_COMPOSITION = ('ETH-1', 2.02, -2.19) # oftentimes for standard racks, we don't use ETH-3, so this uses ETH-1 as the anchor
-	elif run_type == 'clumped':
-		data.SAMPLE_CONSTRAINING_WG_COMPOSITION = ('ETH-3', 1.71, -1.78)
+	# if run_type == 'standard':
+	# 	data.SAMPLE_CONSTRAINING_WG_COMPOSITION = ('ETH-1', 2.02, -2.19) # oftentimes for standard racks, we don't use ETH-3, so this uses ETH-1 as the anchor
+	# elif run_type == 'clumped':
+	data.SAMPLE_CONSTRAINING_WG_COMPOSITION = ('ETH-3', 1.71, -1.78)
 
 	print('Sample constraining WG composition = ', data.SAMPLE_CONSTRAINING_WG_COMPOSITION)
 	#data.read(Path.cwd() / 'results' / raw_deltas_file) # INPUT
@@ -481,7 +484,7 @@ def run_D47crunch(run_type, raw_deltas_file):
 	elif run_type == 'standard':
 		table_of_analyses_std(data, print_out = False, dir = results_path, save_to_file = True, filename = 'analyses_bulk.csv')
 
-		return np.nan
+		return np.nan, np.nan, np.nan
 
 def table_of_analyses_std(data, dir = 'results', filename = 'analyses.csv', save_to_file = True, print_out = True):
         '''
@@ -595,9 +598,7 @@ def add_metadata(dir_path, rptability, batch_data_list, df, df_anal):
 
 	df['d18Ow_VSMOW_A21'] = calc_d18Ow(eps_A21)
 	df['d18Ow_VSMOW_A21_upper'] = round(abs(df['d18Ow_VSMOW_A21'] - calc_d18Ow(eps_A21_upper)), 1)
-	df['d18Ow_VSMOW_A21_lower'] = round(abs(df['d18Ow_VSMOW_A21'] - calc_d18Ow(eps_A21_lower)), 1)
-
-	
+	df['d18Ow_VSMOW_A21_lower'] = round(abs(df['d18Ow_VSMOW_A21'] - calc_d18Ow(eps_A21_lower)), 1)	
 
 	df_batch = pd.DataFrame(batch_data_list, columns = ['UID', 'Transducer_Pressure', 'Sample_Weight', 'NuCarb_temp','Pumpover_Pressure',
 		'Init_Sam_beam', 'Balance', 'Vial_Location', 'd13C_SE (Nu)', 'd18O_SE (Nu)', 'D47_SE (Nu)', 'd47_pre_SE', 'd47_post_SE', 'Bad_Cycles'])
