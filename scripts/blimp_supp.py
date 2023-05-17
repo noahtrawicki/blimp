@@ -283,12 +283,15 @@ def read_Nu_data(data_file, file_number, current_sample, folder_name, run_type):
 	# This goes through batch summary data and checks values against thresholds from params.xlsx
 	for i in os.listdir(this_path):
 		if 'Batch Results.csv' in i and 'fail' not in os.listdir(this_path): # checks for and reads results summary file 
+		
 			summ_file = Path.cwd() / 'raw_data' / folder_name / i # i = e.g., 20210505 clumped dolomite apatite calibration 5 NTA Batch Results.csv
 			df_results_summ = pd.read_csv(summ_file, encoding = 'latin1', skiprows = 3, header = [0,1])
 			df_results_summ.columns = df_results_summ.columns.map('_'.join).str.strip()	# fixes weird headers of Nu Summary files
 
 			#Get the index location of the row that corresponds to the given file number (i.e. replicate)
+
 			curr_row = df_results_summ.loc[df_results_summ['Data_File'].str.contains(str(file_number), na = False)].index
+
 			batch_data_list = [file_number, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, d47_pre_SE, d47_post_SE, bad_count]
 			if len(curr_row) == 1 and run_type == 'clumped': # curr_row is Int64Index, which acts like a list. If prev line finds either 0 or 2 matching lines, it will skip this section.
 				transduc_press = float(df_results_summ['Transducer_Pressure'][curr_row])				
@@ -450,19 +453,20 @@ def run_D47crunch(run_type, raw_deltas_file):
 		manual_rmv = list(df_rmv.UID)
 		manual_rmv_reason = list(df_rmv.Notes)
 
-		# Create a little dictionary to store info about the project
-		summ_dict = {'n_sessions':n_sess, 'n_samples':n_samp, 'n_analyses':n_anal,
-		'Nominal_D47_ETH-1':data.Nominal_D47['ETH-1'], 'Nominal_D47_ETH-2':data.Nominal_D47['ETH-2'],
-		'Nominal_D47_ETH-3':data.Nominal_D47['ETH-3'], 'Nominal_D47_ETH-4':data.Nominal_D47['ETH-4'],
-		'Nominal_D47_IAEA-C2':data.Nominal_D47['IAEA-C2'], 'Nominal_D47_MERCK':data.Nominal_D47['MERCK'],
-		'Reprod_d13C': rpt_d13C, 'Reprod_d18O':rpt_d18O, 'Reprod_D47':repeatability_all, 'Long_term_SD_threshold':long_term_d47_SD, 
-		'Num_SD_threshold':num_SD, 'Bad_cycles_threshold':bad_count_thresh, 'Transducer_pressure_threshold': transducer_pressure_thresh,
-		'Balance_high_threshold':balance_high,'Balance_low_threshold':balance_low, 'Manually_removed':manual_rmv, 'Manually_removed_reason': manual_rmv_reason}
+		#Create a little dictionary to store info about the project
+		#NOAH -- makes this smarter so will accept other anchors dynamically
+		# summ_dict = {'n_sessions':n_sess, 'n_samples':n_samp, 'n_analyses':n_anal,
+		# 'Nominal_D47_ETH-1':data.Nominal_D47['ETH-1'], 'Nominal_D47_ETH-2':data.Nominal_D47['ETH-2'],
+		# 'Nominal_D47_ETH-3':data.Nominal_D47['ETH-3'], 'Nominal_D47_ETH-4':data.Nominal_D47['ETH-4'],
+		# 'Nominal_D47_IAEA-C2':data.Nominal_D47['IAEA-C2'], 'Nominal_D47_MERCK':data.Nominal_D47['MERCK'],
+		# 'Reprod_d13C': rpt_d13C, 'Reprod_d18O':rpt_d18O, 'Reprod_D47':repeatability_all, 'Long_term_SD_threshold':long_term_d47_SD, 
+		# 'Num_SD_threshold':num_SD, 'Bad_cycles_threshold':bad_count_thresh, 'Transducer_pressure_threshold': transducer_pressure_thresh,
+		# 'Balance_high_threshold':balance_high,'Balance_low_threshold':balance_low, 'Manually_removed':manual_rmv, 'Manually_removed_reason': manual_rmv_reason}
 
-		df_prj_summ = pd.DataFrame([summ_dict], index = [0])
-		# df_prj_summ['Manually_removed'] = df_rmv['UID']
-		# df_prj_summ['Manually_removed_reason'] = df_rmv['Notes']
-		df_prj_summ.to_csv(Path.cwd()/ 'results' / 'project_info.csv', index = False)	
+		# df_prj_summ = pd.DataFrame([summ_dict], index = [0])
+		# # df_prj_summ['Manually_removed'] = df_rmv['UID']
+		# # df_prj_summ['Manually_removed_reason'] = df_rmv['Notes']
+		# df_prj_summ.to_csv(Path.cwd()/ 'results' / 'project_info.csv', index = False)	
 
 		print('Anchors are ', data.Nominal_D47)	# list anchors used and their nominal D47
 
@@ -625,12 +629,54 @@ def add_metadata(dir_path, rptability, batch_data_list, df, df_anal):
 	n_bad_cycles = df_anal['Bad_Cycles'].sum()
 	print('Total # bad cycles removed = ', n_bad_cycles, '(', round((n_bad_cycles/(len(df_anal)*60))*100, 2), '%)') # does not include bad cycles from disabled reps
 
-	eth_loc = np.where(df_anal['Sample'] == 'ETH-4')	
-	mbar_mg_eth = (df_anal['Transducer_Pressure'].iloc[eth_loc] / df_anal['Sample_Weight'].iloc[eth_loc]).mean()
-	df_anal['pct_evolved_carbonate'] = round(((df_anal['Transducer_Pressure'] / df_anal['Sample_Weight']) / mbar_mg_eth)*100, 1)
+
+	# --- CALCULATE PERCENT EVOLVED CARBONATE FOR DOLOMITE AND CALCITE
+	# eth_loc = np.where(df_anal['Sample'] == 'ETH-4')	
+	# mbar_mg_eth = (df_anal['Transducer_Pressure'].iloc[eth_loc] / df_anal['Sample_Weight'].iloc[eth_loc]).mean()
+	
+	dol_carb_scaler = 1 + (((100.087*2) - (84.314 + 100.087))/(100.087*2)) # mw 2x caco3 minus (mw mgco3 + mw caco3)
+
+	def calc_pct_evolv_carb(mineral, transduc_press, samp_weight, mbar_mg_eth):
+
+		pct_evolved_carb = ((transduc_press/samp_weight)/mbar_mg_eth)*100
+		if mineral == 'Dolomite':
+			return round(pct_evolved_carb/dol_carb_scaler,1)
+		else:
+			return round(pct_evolved_carb,1)
+
+	df_anal['pct_evolved_carbonate'] = np.zeros(len(df_anal))
+
+# New code to just get pct evolved carbonate relative to that particular session
+
+	sess_eth4_tp_dict = {}
+
+	for i in range(len(df_anal['Session'].unique())):
+		this_sess = df_anal[df_anal['Session'] == df_anal['Session'].unique()[i]]
+		eth_loc = np.where(this_sess['Sample'] == 'ETH-4')	
+		mbar_mg_eth = (this_sess['Transducer_Pressure'].iloc[eth_loc] / this_sess['Sample_Weight'].iloc[eth_loc]).mean()
+		sess_eth4_tp_dict[df_anal['Session'].unique()[i]] = mbar_mg_eth # assigns each session a baseline TP value based on ETH-4
+
+	# using dictionary above, calculate pec 
+	for j in range(len(df_anal)):
+		df_anal['pct_evolved_carbonate'].iloc[j] = calc_pct_evolv_carb(df_anal['Mineralogy'].iloc[j], df_anal['Transducer_Pressure'].iloc[j], df_anal['Sample_Weight'].iloc[j], sess_eth4_tp_dict[df_anal['Session'].iloc[j]])
+
+		
+
+		# for j in range(len(df_anal['Session'].unique()[i])):
+
+		# 	df_anal['pct_evolved_carbonate'].iloc[j] = calc_pct_evolv_carb(df_anal['Mineralogy'].iloc[j], df_anal['Transducer_Pressure'].iloc[j], df_anal['Sample_Weight'].iloc[j], mbar_mg_eth)
+
+
+	# for i in range(len(df_anal)):
+
+	# 	df_anal['pct_evolved_carbonate'].iloc[i] = calc_pct_evolv_carb(df_anal['Mineralogy'].iloc[i], df_anal['Transducer_Pressure'].iloc[i], df_anal['Sample_Weight'].iloc[i])
+
+	# # ---
 
 	mean_pct_carb, resid = calc_residual(df_anal)
 	df_anal['D47_residual'] = resid
+	df_anal['d47_VPDB'] = df_anal['d13C_VPDB'] + df_anal['d18O_VPDB_mineral']
+	df['d47_VPDB'] = df['d13C_VPDB'] + df['d18O_VPDB_mineral']
 	df['mean_pct_carb'] = round(mean_pct_carb,1)
 
 	df.to_csv(Path.cwd() / 'results' / 'summary.csv', index = False)
@@ -743,8 +789,8 @@ def plot_ETH_D47(repeatability_all, df):
 	df = pd.read_csv(Path.cwd() / 'analyses.csv')
 
 	df_anchor = df.loc[(df['Sample'] == 'ETH-1') | (df['Sample'] == 'ETH-2') | 
-	(df['Sample'] == 'ETH-3') | (df['Sample'] == 'ETH-4') | (df['Sample'] == 'IAEA-C2') 
-	| (df['Sample'] == 'MERCK')]# | (df['Sample'] == 'IAEA-C1')]
+	(df['Sample'] == 'ETH-3') | (df['Sample'] == 'ETH-4') | (df['Sample'] == 'IAEA-C2')]
+	#| (df['Sample'] == 'MERCK')]# | (df['Sample'] == 'IAEA-C1')]
 
 	df_anchor = df_anchor.reset_index(drop = True)
 
