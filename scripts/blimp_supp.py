@@ -8,6 +8,12 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import time
 
+
+# get name of project
+with open('proj.txt') as file:
+    proj = file.read()
+os.remove('proj.txt')
+
 # ---- INITIALIZE VARIABLES ----
 lil_del_dict_eth3 = []
 lil_del_dict_eth3_UID = []
@@ -37,7 +43,7 @@ plt.rcParams['ytick.direction'] = 'in'
 
 # ---- READ IN PARAMETERS ('params.xlsx') ----
 
-xls = pd.ExcelFile(Path.cwd().parents[0] / 'params.xlsx')
+xls = pd.ExcelFile(Path.cwd().parents[0] / 'proj' / proj / 'params.xlsx')
 df_anc = pd.read_excel(xls, 'Anchors', index_col = 'Anchor')
 df_const = pd.read_excel(xls, 'Constants', index_col = 'Name')
 df_threshold = pd.read_excel(xls, 'Thresholds', index_col = 'Type')
@@ -372,7 +378,7 @@ def fix_names(df):
 	change_anchor_name('IAEA-C2', 'IAEA-C1', 15, 18, 10, 13)
 	change_anchor_name('IAEA-C1', 'IAEA-C2', 3, 6, -2, 1)
 
-	dir_path_fixed = Path.cwd() / 'results' / 'raw_deltas.csv' # write new names to file
+	dir_path_fixed = Path.cwd() / 'results' / f'raw_deltas_{proj}.csv' # write new names to file
 	df.to_csv(dir_path_fixed, index = False)
 
 
@@ -384,11 +390,11 @@ def run_D47crunch(run_type, raw_deltas_file):
 	  '''
 	import D47crunch
 
-	print('Sent to D47crunch. Prrocessing...')
+	print('Sent to D47crunch. Processing...')
 	
 	results_path = Path.cwd() / 'results'
 
-	xls = pd.ExcelFile(Path.cwd() / 'params.xlsx')
+	#xls = pd.ExcelFile(Path.cwd() / 'params.xlsx')
 	df_anc = pd.read_excel(xls, 'Anchors', index_col = 'Anchor')
 	Nominal_D47 = df_anc.to_dict()['D47'] # Sets anchor values for D47crunch as dictionary {Anchor: value}
 
@@ -430,7 +436,7 @@ def run_D47crunch(run_type, raw_deltas_file):
 		rpt_d18O = data.repeatability['r_d18O_VSMOW']
 
 		# display and save session info as csv
-		data.table_of_sessions(verbose = True, print_out = True, dir = results_path, filename = 'sessions.csv', save_to_file = True)
+		data.table_of_sessions(verbose = True, print_out = True, dir = results_path, filename = f'sessions_{proj}.csv', save_to_file = True)
 		
 		sam = data.table_of_samples(verbose = True, print_out = True, save_to_file = False, output = 'raw')
 		analy = data.table_of_analyses(print_out = False, save_to_file = False, output = 'raw')
@@ -478,7 +484,7 @@ def run_D47crunch(run_type, raw_deltas_file):
 
 		# For reps that failed, make csv with all parameters they could have failed on
 		df = pd.DataFrame(rmv_meta_list, columns = ['UID', 'Transducer_Pressure', 'Sample_Weight', 'NuCarb_temp', 'Pumpover_Pressure', 'Initial_Sam', 'Balance', 'Vial_Location', 'd13C_SE (Nu)', 'd18O_SE (Nu)', 'D47_SE (Nu)', 'd47_pre_SE', 'd47_post_SE', 'Bad_count', 'Sample'])
-		save_path =  Path.cwd() / 'results' / 'rmv_analyses.csv'
+		save_path =  Path.cwd() / 'results' / f'rmv_analyses_{proj}.csv'
 		df.to_csv(save_path, index = False)
 
 
@@ -486,11 +492,11 @@ def run_D47crunch(run_type, raw_deltas_file):
 
 	# If it's a standard run, use Noah's reworking of Mathieu's code
 	elif run_type == 'standard':
-		table_of_analyses_std(data, print_out = False, dir = results_path, save_to_file = True, filename = 'analyses_bulk.csv')
+		table_of_analyses_std(data, print_out = False, dir = results_path, save_to_file = True, filename = f'analyses_bulk_{proj}.csv')
 
 		return np.nan, np.nan, np.nan
 
-def table_of_analyses_std(data, dir = 'results', filename = 'analyses.csv', save_to_file = True, print_out = True):
+def table_of_analyses_std(data, dir = 'results', filename = f'analyses_{proj}.csv', save_to_file = True, print_out = True):
         '''
         Print out an/or save to disk a table of analyses. Modified by NTA to just print out 'standard' (d13C and d18O) data
 
@@ -669,8 +675,8 @@ def add_metadata(dir_path, rptability, batch_data_list, df, df_anal):
 	df['d47_VPDB'] = df['d13C_VPDB'] + df['d18O_VPDB_mineral']
 	df['mean_pct_carb'] = round(mean_pct_carb,1)
 
-	df.to_csv(Path.cwd() / 'results' / 'summary.csv', index = False)
-	df_anal.to_csv(Path.cwd() / 'results' / 'analyses.csv', index = False)
+	df.to_csv(Path.cwd() / 'results' / f'summary_{proj}.csv', index = False)
+	df_anal.to_csv(Path.cwd() / 'results' / f'analyses_{proj}.csv', index = False)
 	to_earthchem(df_anal)
 
 	os.chdir(dir_path)
@@ -678,7 +684,7 @@ def add_metadata(dir_path, rptability, batch_data_list, df, df_anal):
 def add_metadata_std():
 
 	file_meta = Path.cwd() / 'params.xlsx'
-	df_anal = pd.read_csv(Path.cwd() / 'results' / 'analyses_bulk.csv')
+	df_anal = pd.read_csv(Path.cwd() / 'results' / f'analyses_bulk_{proj}.csv')
 
 	if os.path.exists(file_meta):
 		df_meta = pd.read_excel(file_meta, 'Metadata')
@@ -690,7 +696,7 @@ def add_metadata_std():
 	else:
 		df_anal['d18O_VPDB_mineral'] = round(((df_anal['d18O_VSMOW'] - 1000*np.log(1.00871) - 30.92)/1.03092), 1) # convert from CO2 d18O (VSMOW) to calcite d18O (VPDB) if mineralogy not specified
 
-	df_anal.to_csv(Path.cwd() / 'results' / 'analyses_bulk.csv', index = False)
+	df_anal.to_csv(Path.cwd() / 'results' / f'analyses_bulk_{proj}.csv', index = False)
 	
 
 def to_earthchem(df_a):
@@ -767,16 +773,17 @@ def to_earthchem(df_a):
 	df_ec['BRD47rfac_P_newAFF'] = df_a['D47']
 	df_ec['d18Oac'] = 'NA' #df_a['d18O_mineral_VPDB']
 
-	df_ec.to_csv(Path.cwd() / 'results' / 'analyses_earthchem_fmt.csv', index = False)
+	df_ec.to_csv(Path.cwd() / 'results' / f'analyses_earthchem_fmt_{proj}.csv', index = False)
 
 # ---- MAKE PLOTS ----
 
+#df = pd.read_csv(Path.cwd().parents[0] / 'proj' / proj / / f'analyses_{proj}.csv')
 
 def plot_ETH_D47(repeatability_all, df):
 
 	from matplotlib.lines import Line2D
 
-	df = pd.read_csv(Path.cwd() / 'analyses.csv')
+	
 
 	df_anchor = df.loc[(df['Sample'] == 'ETH-1') | (df['Sample'] == 'ETH-2') | 
 	(df['Sample'] == 'ETH-3') | (df['Sample'] == 'ETH-4') | (df['Sample'] == 'IAEA-C2')]
@@ -901,9 +908,7 @@ def plot_ETH_D47(repeatability_all, df):
 
 def cdv_plots(df):
 
-	file = Path.cwd().parents[0] / 'results' / 'analyses.csv'
-	df = pd.read_csv(file, encoding = 'latin1')
-	file = Path.cwd().parents[0] / 'results' / 'rmv_analyses.csv'
+	file = Path.cwd().parents[0] / 'results' / f'rmv_analyses_{proj}.csv'
 	df_rmv = pd.read_csv(file, encoding = 'latin1')
 
 	plt.figure(figsize=(12,9))
@@ -1030,12 +1035,11 @@ def interactive_plots(df):
 		from bokeh.transform import jitter
 		
 	except ModuleNotFoundError:
-		print("Bokeh package not found. Install Bokeh for interactive plots.")
+		print('Bokeh package not found. Install Bokeh for interactive plots.')
 		return
 
-# put this in try/except clause
-	#df = pd.read_csv(Path.cwd().parents[0] / 'results' / 'analyses.csv')
-	output_file(filename="D47_d47_interactive.html", title="D47_d47_interactive")
+
+	output_file(filename=Path.cwd().parents[0] / 'plots' / f'D47_d47_interactive_{proj}.html', title="D47_d47_interactive")
 
 	df_anchor = df.loc[(df['Sample'] == 'ETH-1') | (df['Sample'] == 'ETH-2') | 
 				(df['Sample'] == 'ETH-3') | (df['Sample'] == 'ETH-4') | (df['Sample'] == 'IAEA-C2') 
@@ -1064,7 +1068,7 @@ def interactive_plots(df):
 
 	# --- D47_all_interactive ----
 
-	output_file(filename="D47_all_interactive.html", title="D47_all_interactive")
+	output_file(filename=Path.cwd().parents[0] / 'plots' / f'D47_all_interactive_{proj}.html', title='D47_all_interactive')
 
 	sample_names = pd.unique(df['Sample'])
 	TOOLTIPS = [("Sample name", "@Sample"), ("UID", "@UID"), ("d13C", "@d13C_VPDB"), ("d18O_mineral", "@d18O_VPDB_mineral")]
@@ -1076,7 +1080,7 @@ def interactive_plots(df):
 
 	# --- D47_raw_nominal_interactive ---
 
-	output_file(filename="D47_raw_nominal_interactive.html", title="D47_raw_nominal_interactive")
+	output_file(filename=Path.cwd().parents[0] / 'plots' /f"D47_raw_nominal_interactive_{proj}.html", title="D47_raw_nominal_interactive")
 	TOOLTIPS = [("Sample name", "@Sample"), ("UID", "@UID"), ("d13C", "@d13C_VPDB"), ("d18O_mineral", "@d18O_VPDB_mineral"), ("Vial_Location", "@Vial_Location")]
 	std_tools = ['pan,wheel_zoom,box_zoom,reset,hover']
 
