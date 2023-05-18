@@ -1,4 +1,4 @@
-# --- VERSION 0.1.6 updated 20220616 by NTA ---
+# --- VERSION 0.1.7 updated 20230517 by NTA ---
 
 import pandas as pd
 import numpy as np
@@ -109,7 +109,7 @@ def thousandlna(mineral):
 
 def calc_residual(df_analy):
 	unique_samples = pd.unique(df_analy['Sample'])
-	df_samp_mean = df_analy.groupby(['Sample'], as_index = False).mean() # create df of avg values for each sample
+	df_samp_mean = df_analy.groupby(['Sample'], as_index = False).mean(numeric_only = True) # create df of avg values for each sample
 	pct_evolved_carb = df_samp_mean['pct_evolved_carbonate']
 	resid = []
 
@@ -660,18 +660,8 @@ def add_metadata(dir_path, rptability, batch_data_list, df, df_anal):
 	for j in range(len(df_anal)):
 		df_anal['pct_evolved_carbonate'].iloc[j] = calc_pct_evolv_carb(df_anal['Mineralogy'].iloc[j], df_anal['Transducer_Pressure'].iloc[j], df_anal['Sample_Weight'].iloc[j], sess_eth4_tp_dict[df_anal['Session'].iloc[j]])
 
-		
-
-		# for j in range(len(df_anal['Session'].unique()[i])):
-
-		# 	df_anal['pct_evolved_carbonate'].iloc[j] = calc_pct_evolv_carb(df_anal['Mineralogy'].iloc[j], df_anal['Transducer_Pressure'].iloc[j], df_anal['Sample_Weight'].iloc[j], mbar_mg_eth)
 
 
-	# for i in range(len(df_anal)):
-
-	# 	df_anal['pct_evolved_carbonate'].iloc[i] = calc_pct_evolv_carb(df_anal['Mineralogy'].iloc[i], df_anal['Transducer_Pressure'].iloc[i], df_anal['Sample_Weight'].iloc[i])
-
-	# # ---
 
 	mean_pct_carb, resid = calc_residual(df_anal)
 	df_anal['D47_residual'] = resid
@@ -814,7 +804,7 @@ def plot_ETH_D47(repeatability_all, df):
 					ax.text(df_anchor['D47'][j] + 0.005, df_anchor['Sample'][j], df_anchor['UID'][j], zorder = 6)
 	plt.xlabel('D47 I-CDES')
 	#plt.legend()
-	plt.tight_layout()
+	#plt.tight_layout()
 	plt.savefig(Path.cwd().parents[0] / 'plots' / 'anchor_D47.png')
 	plt.close()
 
@@ -840,7 +830,7 @@ def plot_ETH_D47(repeatability_all, df):
 				Line2D([0], [0], marker = 'o', markerfacecolor = pal[4], color='w', label = 'IAEA-C2'),
 				Line2D([0], [0], marker = 'o', markerfacecolor = pal[5], color='w', label = 'MERCK'),
 				Line2D([0], [0], color='black', lw=4, label='1SD reprod.')]
-	plt.grid(b=True, which='major', color='gray', linestyle='--', zorder = 0, alpha = 0.4)
+	plt.grid(visible=True, which='major', color='gray', linestyle='--', zorder = 0, alpha = 0.4)
 	plt.xlabel('UID')
 	plt.ylabel('D47 - Nominal')
 	ax.legend(handles = leg_elem)
@@ -860,7 +850,7 @@ def plot_ETH_D47(repeatability_all, df):
 					
 		ax.scatter(df_anchor['UID'][j], df_anchor['D47raw'][j] - nom_D47, color = col, alpha = 1, edgecolor = 'black')
 
-	plt.grid(b=True, which='major', color='gray', linestyle='--', zorder = 0, alpha = 0.4)
+	plt.grid(visible=True, which='major', color='gray', linestyle='--', zorder = 0, alpha = 0.4)
 	plt.xlabel('UID')
 	plt.ylabel('D47raw - Nominal')
 	ax.legend(handles = leg_elem[0:5])
@@ -869,16 +859,16 @@ def plot_ETH_D47(repeatability_all, df):
 
 	# ------ PLOT D47 ALL --------
 
-	fig_ht = len(df)*0.02 + 1
+	fig_ht = len(df)*0.1 + 1
 
 	fig, ax = plt.subplots(figsize = (7, fig_ht))
 	ax.scatter(df['D47'], df['Sample'], alpha = 0.8, color = 'white', edgecolor = 'black', label = 'Unknown')
-	plt.grid(b=True, which='major', color='gray', linestyle='--', zorder = 0, alpha = 0.4)	
+	plt.grid(visible=True, which='major', color='gray', linestyle='--', zorder = 0, alpha = 0.4)	
 	for i in range(len(df)):
 		if "ETH" in df.Sample.iloc[i] or "IAEA" in df.Sample.iloc[i] or "MERCK" in df.Sample.iloc[i]:
 			ax.scatter(df.D47.iloc[i], df.Sample.iloc[i], color = 'gray', edgecolor = 'black', linewidth = .75, zorder = 9, label = 'Anchor')
 	plt.xlabel('D47 I-CDES')	
-	plt.tight_layout()
+	#plt.tight_layout()
 	plt.savefig(Path.cwd().parents[0] / 'plots' / 'all_D47.png')
 
 	plt.close()
@@ -893,8 +883,8 @@ def plot_ETH_D47(repeatability_all, df):
 		samp = df['Sample'][i]
 		ax.scatter(df['d13C_VPDB'][i] - d13C_median[samp], samp, color = 'white', edgecolor = 'black')
 	plt.xlabel('d13C VPDB offset from median')
-	plt.grid(b=True, which='major', color='gray', linestyle='--', zorder = 0, alpha = 0.4)	
-	plt.tight_layout()
+	plt.grid(visible=True, which='major', color='gray', linestyle='--', zorder = 0, alpha = 0.4)	
+	#plt.tight_layout()
 	plt.savefig(Path.cwd().parents[0] / 'plots' / 'd13C.png')
 
 	d18O_median = df.groupby('Sample')['d18O_VSMOW'].median()
@@ -904,8 +894,8 @@ def plot_ETH_D47(repeatability_all, df):
 		samp = df['Sample'][i]
 		ax.scatter(df['d18O_VSMOW'][i] - d18O_median[samp], samp, color = 'white', edgecolor = 'black')
 	plt.xlabel('d18O VSMOW offset from median')
-	plt.grid(b=True, which='major', color='gray', linestyle='--', zorder = 0, alpha = 0.4)
-	plt.tight_layout()
+	plt.grid(visible=True, which='major', color='gray', linestyle='--', zorder = 0, alpha = 0.4)
+	#plt.tight_layout()
 	plt.savefig(Path.cwd().parents[0] / 'plots' / 'd18O.png')
 	plt.close()
 
@@ -921,7 +911,7 @@ def cdv_plots(df):
 
 # Plots transducer pressure vs. sample weight for baseline and your run. 
 	plt.subplot(2,2,1)
-	plt.grid(b=True, which='major', color='gray', linestyle='--', zorder = 0, alpha = 0.4)	
+	plt.grid(visible=True, which='major', color='gray', linestyle='--', zorder = 0, alpha = 0.4)	
 	plt.xlim(350, 550)
 	plt.ylim(10, 40)
 	plt.xlabel('Sample weight')
@@ -941,7 +931,7 @@ def cdv_plots(df):
 
 	# plots max pumpover pressure vs. sample weight for basline and your run
 	plt.subplot(2,2,2)
-	plt.grid(b=True, which='major', color='gray', linestyle='--', zorder = 0, alpha = 0.4)	
+	plt.grid(visible=True, which='major', color='gray', linestyle='--', zorder = 0, alpha = 0.4)	
 	if use_baseline == 'y':
 		plt.scatter(df_baseline.sample_weight.iloc[3:], df_baseline.max_pump.iloc[3:], color = baseline_col, alpha = baseline_opac, zorder = 3, label = 'Baseline')
 	plt.scatter(df.Sample_Weight.iloc[1:], df.Pumpover_Pressure.iloc[1:], color = pal[1], alpha = 1, zorder = 6, label = 'Unknown')
@@ -959,7 +949,7 @@ def cdv_plots(df):
 
 	# Plots Balance % vs. vial location for baseline and your run
 	plt.subplot(2,2,3)
-	plt.grid(b=True, which='major', color='gray', linestyle='--', zorder = 0, alpha = 0.4)	
+	plt.grid(visible=True, which='major', color='gray', linestyle='--', zorder = 0, alpha = 0.4)	
 	if use_baseline == 'y':
 		plt.scatter(df_baseline.UID.iloc[3:], df_baseline.Balance.iloc[3:], color = baseline_col, alpha = baseline_opac, zorder = 3, label = 'Baseline')
 	plt.scatter(df.UID.iloc[1:], df.Balance.iloc[1:], color = pal[1], alpha = 1, zorder = 6, label = 'Unknown')
@@ -980,7 +970,7 @@ def cdv_plots(df):
 
 	# Plots D49 vs. vial location for baseline and your run
 	plt.subplot(2,2,4)
-	plt.grid(b=True, which='major', color='gray', linestyle='--', zorder = 0, alpha = 0.4)	
+	plt.grid(visible=True, which='major', color='gray', linestyle='--', zorder = 0, alpha = 0.4)	
 	if use_baseline == 'y':
 		plt.scatter(df_baseline.UID.iloc[3:], df_baseline.D49.iloc[3:], color = baseline_col, alpha = baseline_opac, zorder = 3, label = 'Baseline')
 	plt.scatter(df.UID.iloc[1:], df.D49raw.iloc[1:], color = pal[1], alpha = 1, zorder = 6, label = 'Unknown')
@@ -1003,11 +993,11 @@ def cdv_plots(df):
 	df = df.loc[df['Sample'] == 'IAEA-C1']
 	plt.scatter(df['UID'], df['D47'], color = 'white', edgecolor = 'black')
 	plt.axhline(0.3018, color = 'black')
-	plt.grid(b=True, which='major', color='gray', linestyle='--', zorder = 0, alpha = 0.4)	
+	plt.grid(visible=True, which='major', color='gray', linestyle='--', zorder = 0, alpha = 0.4)	
 	plt.xlabel('UID')
 	plt.ylabel('D47')
 	plt.title('IAEA-C1 D47')
-	plt.tight_layout()
+	#plt.tight_layout()
 	plt.savefig(Path.cwd().parents[0] / 'plots' / 'IAEA-C1_reprod.png')
 	plt.close()
 
@@ -1023,7 +1013,7 @@ def d47_D47_plot(df):
 	
 	plt.xlabel('d47')
 	plt.ylabel('D47')
-	plt.tight_layout()
+	#plt.tight_layout()
 	plt.savefig(Path.cwd().parents[0] / 'plots' / 'd47_D47.png')
 	plt.close()
 
@@ -1120,7 +1110,7 @@ def joy_plot():
 	df['rep'] = new_rep
 	
 	cpal = sns.cubehelix_palette(10, rot=-.25, light=.7)
-	g = sns.FacetGrid(df, row="rep", hue="rep", aspect=15, height=.5, palette=cpal)
+	g = sns.FacetGrid(df, row="rep", hue="rep", aspect=15, height=1, palette=cpal)
 
 	# Draw the densities in a few steps
 	g.map(sns.kdeplot, "d47",

@@ -1,0 +1,7 @@
+*** WARNING MESSAGES *** 
+WARNING: **BONI_IPGP_100_A3 at 2019-12-03 13:21** || d18O SE = 0.0129
+=================
+The following samples have cycles more than 5 long-term standard deviations (calculated from cycle-level SD for all ETHs over the correction interval) from the mean. 
+These cycles should be disabled in Easotope (Screens > Data Input > Your name > Your project). 
+Please write a note in Easotope with your name, the date you modified the data, and why you disabled cycles/a replicate. 
+--------------------- 

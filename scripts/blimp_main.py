@@ -1,4 +1,4 @@
-# --- VERSION 0.1.6 updated 20220517 by NTA ---
+# --- VERSION 0.1.7 updated 20230517 by NTA ---
 
 
 import os
@@ -11,7 +11,15 @@ output_sep = '------------------------'
 
 print(output_sep)
 
-dir_path = Path.cwd().parents[0]
+proj = input("Enter name of project:")
+
+if os.path.isdir(Path.cwd().parents[0] / 'proj' / proj):
+	dir_path = Path.cwd().parents[0] / 'proj' / proj
+
+else:
+	print('Project name does not exist in directory. Try again.')
+	exit()
+
 os.chdir(dir_path)
 
 rd_path = Path.cwd() / 'raw_data'
