@@ -2,7 +2,6 @@
 
 
 import os
-import blimp_supp as b_s
 import pandas as pd
 from pathlib import Path
 #import make_pdf as mk_pdf
@@ -16,11 +15,20 @@ proj = input("Enter name of project:")
 if os.path.isdir(Path.cwd().parents[0] / 'proj' / proj):
 	dir_path = Path.cwd().parents[0] / 'proj' / proj
 
+
 else:
 	print('Project name does not exist in directory. Try again.')
 	exit()
 
+# My hacky way of telling the blimp_supp module what the name of the project is...
+with open('proj.txt', 'w') as f:
+    f.write(proj)
+
+import blimp_supp as b_s
+
 os.chdir(dir_path)
+
+
 
 rd_path = Path.cwd() / 'raw_data'
 results_path = Path.cwd() / ('results')
@@ -43,7 +51,7 @@ fold_count = 0
 df_rmv = pd.read_excel('params.xlsx', 'Remove')
 manual_rmv = list(df_rmv.UID)
 run_type = 'clumped'
-
+print(output_sep)
 if os.path.isdir(rd_path): # If there is a raw data folder...
 	print('Crunching folders: ')
 	
@@ -73,14 +81,14 @@ if os.path.isdir(rd_path): # If there is a raw data folder...
 								batch_data_list.append(batch_data)
 
 				fold_count += 1
-		else: print('Ignoring ', folder)
+		else: print('   Ignoring ', folder)
 
 df_d47 = pd.DataFrame(d47_crunch_fmt, columns = ['UID', 'Session', 'Sample', 'd45', 'd46', 'd47', 'd48', 'd49'])
 
 b_s.fix_names(df_d47)
 
 print('Run type:', run_type)
-raw_deltas_file = Path.cwd() / 'results' / 'raw_deltas.csv'
+raw_deltas_file = Path.cwd() / 'results' / f'raw_deltas_{proj}.csv'
 
 df_sam, df_analy, rptability = b_s.run_D47crunch(run_type, raw_deltas_file)
 
@@ -94,7 +102,7 @@ if run_type == 'clumped':
 	print('Data processing complete. Working on plots...')
 	print(output_sep)
 
-	df = pd.read_csv(Path.cwd().parents[0]/ 'results' / 'analyses.csv')
+	df = pd.read_csv(Path.cwd().parents[0]/ 'results' / f'analyses_{proj}.csv')
 
 	b_s.plot_ETH_D47(rptability, df)	
 	b_s.cdv_plots(df)
