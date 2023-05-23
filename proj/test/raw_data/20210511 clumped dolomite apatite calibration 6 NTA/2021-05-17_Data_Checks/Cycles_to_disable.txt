@@ -1,0 +1,33 @@
+*** WARNING MESSAGES *** 
+WARNING: **SRM-88b at 2021-05-12 08:54** || d18O SE = 0.0089
+WARNING: **SRM-88b at 2021-05-12 08:54** || D47 SE (Nu style) = 0.0496
+WARNING: **BONI_300_A2 at 2021-05-13 01:59** || D47 SE (Nu style) = 4.1485
+WARNING: **BONI_200_A1 at 2021-05-13 14:11** || D47 SE (Nu style) = 0.0205
+WARNING: **ETH-2 at 2021-05-14 19:29** || D47 SE (Nu style) = 0.053
+WARNING: **ETH-3 at 2021-05-15 19:53** || Transducer pressure  = 19.775
+WARNING: **BONI_300_A2 at 2021-05-16 03:12** || D47 SE (Nu style) = 0.0925
+=================
+The following samples have external SD > 0.05 and cycles with 1-10 cap 47 values > 3 SD outside of the mean. 
+These cycles need to be disabled in Easotope (Screens > Data Input > Your name > Your project). 
+If disabling these cycles does not lower cap 47 WG RAW SD to < 0.05, disable the replicate, and write a note explaining why. 
+--------------------- 
+ SRM-88b 2021-05-12 09:53 [Vial #5]** Block 1, cycle 16 **
+--------------------------------
+ BONI_300_A2 2021-05-13 02:58 [Vial #12]** Block 2, cycle 16 **
+ BONI_300_A2 2021-05-13 02:58 [Vial #12]** Block 2, cycle 17 **
+--------------------------------
+ BONI_200_A1 2021-05-13 15:10 [Vial #17]** Block 1, cycle 4 **
+--------------------------------
+ ETH-2 2021-05-14 20:28 [Vial #29]** Block 3, cycle 5 **
+--------------------------------
+ BONI_150_A4 2021-05-15 03:48 [Vial #32]** Block 2, cycle 20 **
+ BONI_150_A4 2021-05-15 03:48 [Vial #32]** Block 3, cycle 16 **
+--------------------------------
+ ETH-3 2021-05-15 20:52 [Vial #39]** Block 1, cycle 5 **
+ ETH-3 2021-05-15 20:52 [Vial #39]** Block 1, cycle 7 **
+ ETH-3 2021-05-15 20:52 [Vial #39]** Block 1, cycle 20 **
+ ETH-3 2021-05-15 20:52 [Vial #39]** Block 3, cycle 2 **
+--------------------------------
+ BONI_300_A2 2021-05-16 04:11 [Vial #40]** Block 1, cycle 5 **
+ BONI_300_A2 2021-05-16 04:11 [Vial #40]** Block 1, cycle 6 **
+--------------------------------

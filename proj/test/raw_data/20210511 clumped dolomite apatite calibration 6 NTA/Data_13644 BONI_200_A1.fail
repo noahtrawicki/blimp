@@ -1,0 +1,144 @@
+"C:\Nu Stable\Analyses\DI\CO2 20-6-20 clumped NuCarb.rdf Analysis,         Data File Version 12"
+"Started analysis at 00:42 on the Sunday, May 16, 2021"
+"LIDI data format",#FALSE#
+"UTC FileTimeLow",-1847408640," UTC FileTimeHigh",21968339
+"Time Zone ","Eastern Daylight Time"
+"CO Disabled",#FALSE#
+"Persective Instrument","PS019"
+"User logged in",#FALSE#
+"Software Version","Stable 1.71.5"
+"Axial Mass is :",46.01297
+"No_C_O_Cycles",0
+"Num Blocks",0
+0
+-1
+-1
+-1
+-1
+0
+-1
+0
+-1
+0
+"Sample Name is ","BONI_200_A1"
+"Sample Failed","Sample beam size (9.2447e-11) too small"
+"H3 factor",13.13339
+"Linearity factor (0)",0
+"Linearity factor (1)",0
+"Linearity factor (2)",0
+"Linearity factor (3)",0
+"Linearity factor (4)",0
+"Linearity factor (5)",0
+"Collector Gains :",500,5000,5000,5000,500,500,50,500,1,5
+"Number of deflectors available : ",33
+"Source HT",8000
+"Extraction V",680
+"H Defl",90
+"Trap",800
+"Trap Voltage",24
+"Repeller",1.5
+"Filament V",-100
+"Delta HP",105
+"Z Lens",95
+"Delta Z",9
+"Max Current",3.5
+"Heater Current",1.1
+"Quad 1",175
+"Cubic 1",0
+"Lin 1",0
+"Deflect 1 I",-20
+"Deflect 1 O",0
+"Offset 1",0
+"Offset 2",0
+"Quad 2",-666
+"Cubic 2",0
+"Lin 2",0
+"Q1 I Cor",0
+"Q1 O Cor",0
+"Suppressor",-100
+"Mop Plate",-15
+"ESA H1",790
+"ESA H1 delta",0
+"ESA H2",800
+"ESA H2 delta",0
+"ESA H3",830
+"ESA H3 delta",0
+"ESA HD",0
+"ESA HD delta",0
+"Batch Started: ","11:05:21 20:42:30"
+"Data File: ","C:\Nu Stable\Results\2021\20210511 clumped dolomite apatite calibration 6 NTA\Data_13644 BONI_200_A1.fail"
+"Sample Name: ","BONI_200_A1"
+"Sample Weight: ",480
+"Sample Type: ","Sam"
+"Vial Number: ",40
+"Sam Beam First CO: ","-1.000000e-20"
+"Sam Beam Last CO: ","-1.000000e-20"
+"Ref Beam First CO: ","-1.000000e-20"
+"Ref Beam Second CO: ","-1.000000e-20"
+"Ref BeamLast CO: ","-1.000000e-20"
+"Sam Depletion: ","0 %"
+"Ref Depletion: ","0 %"
+"Observed CP Temperature: ",71.884
+"Std Dev: ","2.527e-01"
+"Min: ","71.612"
+"Max: ","72.117"
+"Ave Started: ","15:05:21 22:43:15"
+"Ave Stopped: ","15:05:21 20:56:31"
+"Num: ",212
+"Current Mass: ",46.01298
+"Method File Name","C:\Nu Stable\Analyses\DI\CO2 20-6-20 clumped NuCarb.rdf"
+"Version 6"
+"Analysis Type","DI"
+"Analysis Calculation Routine ","Clumped CO2 Iterative"
+"Gas ID ","CO2"
+"Ref Gas Identifier ","AirLiquide01"
+"Centring collector ",8
+"Num of Ref/Sam cycles ",20
+"Cycles length(secs) ",20
+"C/O valve stabilisation time ",8
+"Offset for zero measurement(amu) ",0
+"Zero measurement time ",20
+"Spare",0
+"Spare",0
+0
+-1
+-1
+-1
+-1
+0
+-1
+0
+-1
+0
+"Num Clumped Blocks","4"
+"Do zero at start of block",#FALSE#
+"Balance beams",#TRUE#
+"Mag Hysteresis Offset",.001
+"Apply Hysteresis Offset",#FALSE#
+"Target Beam (A) ",.00000008
+"Use CF with Bellows ",#TRUE#
+"DI Auto Gas balancing: ","True"
+"Pirani pressure",3.036908E-02
+"Cold finger status","CF"
+"Inlet transducer pressure",.4271419
+"Sample operations:  InitialisePrepSampleRun; CheckIfCFRequired; UseCF; SampleTrapped; SampleFail;"
+"Number of sample chops",0
+"Number of sample double chops",0
+"Run from bellows",#FALSE#
+"Max sample pump-over pressure (mBar)","3.322723e-02"
+"Max sample pump-over pressure (raw)",14816
+"Pre-balance Sam Beam","0.000000e00"
+"Min ref beam","4.113046e-08"
+"Max ref beam","1.056862e-07"
+"Ref bellows position",0
+"Sam bellows position",0
+"Balance %",0
+"Initial Sam Beam","9.244689e-11"
+"Final Ref Beam","5.549224e-08"
+"Final Sam Beam","5.564348e-08"
+"Pre-depleted Ref Beam",5.567499E-08
+"InletPiraniPressure",3.036908E-02
+"Depletion Factor",.96
+"Balance End","30/12/99 00:00:00"
+"Water Trap Temperature Hot",-195.1766
+"Water Trap Temperature Cold",50.65984

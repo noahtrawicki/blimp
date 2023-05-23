@@ -81,21 +81,56 @@ def calc_Petersen_temp(D47_value):
 	'''Calculates D47 temperature (C) using calibration from Petersen et al. (2019) 90C'''
 	return (((0.0383 * 1000000) / (D47_value - 0.170))**0.5) - 273.15
 
+
+def make_water(D47_T, Mineralogy):
+	'''Makes water using Anderson et al. (2021) for calcite and Horita (2014) for dolomite -- lab default as of May 2023'''
+
+	a_A21_H14=np.zeros(len(D47_T))
+	DLmask=np.array(Mineralogy == 'Dolomite') | np.array(Mineralogy == 'dolomite')
+	if DLmask.sum()>0: # USE H14
+		thousandlna_A21 = ((3.14*1e6)*(D47_T[DLmask]+ 273.15)**-2)-3.14
+		a_A21_H14[DLmask]= np.exp((thousandlna_A21/1000))
+	if (~DLmask).sum()>0: # USE A21
+		thousandlna_A21 = 17.5 * (1e3 * (1/(D47_T[~DLmask] + 273.15))) - 29.1
+		a_A21_H14[~DLmask]= np.exp((thousandlna_A21/1000))
+
+	return a_A21_H14
+
 def make_water_KON97(D47_T):
 	'''Calculates fluid d18O based on D47 temperature from Kim and O'Neil (1997)'''
 	thousandlna_KON97 = 18.03 * (1e3 * (1/(D47_T + 273.15))) - 32.42
-	a_KON97 = np.exp((thousandlna_KON97/1000))
-	eps_KON97 = (a_KON97-1) * 1e3
+	return np.exp((thousandlna_KON97/1000))
+# 	eps_KON97 = (a_KON97-1) * 1e3
 
-	return eps_KON97
 
 def make_water_A21(D47_T):
 	'''Calculates fluid d18O based on D47 temperature from Anderson et al. (2021)'''
 	thousandlna_A21 = 17.5 * (1e3 * (1/(D47_T + 273.15))) - 29.1
-	a_A21 = np.exp((thousandlna_A21/1000))
-	eps_A21 = (a_A21-1) * 1e3
+	return np.exp((thousandlna_A21/1000))
+
+def make_water_MK77(D47_T):
+	'''Calculates fluid d18O by Mineralogy based on D47 temperature from Anderson et al. (2021) using
+	A21 and MK77 for dolomite'''
+	thousandlna_A21= ((3.06*1e6)*(D47_T+ 273.15)**-2)-3.24
+	return np.exp((thousandlna_A21/1000))
+
+
+def make_water_H14(D47_T):
+	'''Calculates fluid d18O by Mineralogy based on D47 temperature from Anderson et al. (2021) using
+	H14 for dolomite'''
+
+	thousandlna_A21 = ((3.14*1e6)*(D47_T+ 273.15)**-2)-3.14
+	return np.exp((thousandlna_A21/1000)) # alpha
+
+		
+def make_water_V05(D47_T):
+	'''Calculates fluid d18O by Mineralogy based on D47 temperature from Anderson et al. (2021) using
+	A21 and V05 for dolomite'''
+
+	thousandlna_A21 = ((2.73*1e6)*(D47_T+ 273.15)**-2)-0.26
+	return np.exp((thousandlna_A21/1000))
 	
-	return eps_A21
+		
 
 def thousandlna(mineral):
 		'''Calculates 18O acid fractination factor to convert CO2 d18O to mineral d18O'''
@@ -125,6 +160,10 @@ def calc_residual(df_analy):
 		resid.append((df_analy['D47'].iloc[i] - samp_mean).iloc[0])
 
 	return pct_evolved_carb, resid
+
+
+
+
 
 
 # ---- Define helper functions ----
@@ -539,7 +578,6 @@ def add_metadata(dir_path, rptability, batch_data_list, df, df_anal):
 	INPUT: 
 	OUTPUT:
 	'''	
-
 	file_meta = Path.cwd() / 'params.xlsx'
 	if os.path.exists(file_meta):
 		df_meta = pd.read_excel(file_meta, 'Metadata')
@@ -580,57 +618,99 @@ def add_metadata(dir_path, rptability, batch_data_list, df, df_anal):
 	T_MIT_95CL_upper_val = df['T_MIT'] + df['T_MIT_95CL_upper']
 	T_MIT_95CL_lower_val = df['T_MIT'] - df['T_MIT_95CL_lower']
 
-	eps_KON97 = df['T_MIT'].map(make_water_KON97)
-	eps_KON97_upper = T_MIT_95CL_upper_val.map(make_water_KON97)
-	eps_KON97_lower = T_MIT_95CL_lower_val.map(make_water_KON97)
 
-	eps_A21 = df['T_MIT'].map(make_water_A21)
-	eps_A21_upper = T_MIT_95CL_upper_val.map(make_water_A21)
-	eps_A21_lower = T_MIT_95CL_lower_val.map(make_water_A21)
-		
-	df['T_MIT'] = round(df['T_MIT'], 1)
-
-	def calc_d18Ow(eps):
+	def calc_d18Ow_alpha(alpha):
 
 		if 'Mineralogy' in df.columns:
-			df['d18O_VPDB_mineral'] = round(((df['d18O_VSMOW'] - list(map(thousandlna, df['Mineralogy']))) - 30.92)/1.03092, 1) # convert from CO2 d18O (VSMOW) to mineral d18O (VPDB)
-			d18Ow_VSMOW = round(df['d18O_VSMOW'] - eps - list(map(thousandlna, df['Mineralogy'])),1) # convert from CO2  d18O VSMOW to water d18O VSMOW
+			df['d18O_VPDB_mineral'] = ((df['d18O_VSMOW'] - list(map(thousandlna, df['Mineralogy']))) - 30.92)/1.03092 # convert from CO2 d18O (VSMOW) to mineral d18O (VPDB)
+			df['d18O_VSMOW_mineral'] = df['d18O_VPDB_mineral'] * 1.03092 + 30.92 # convert mineral VPDB to mineral VSMOW
+			d18Ow_VSMOW = ((1/alpha)*(df['d18O_VSMOW_mineral'] + 1000)) - 1000 # convert from CO2  d18O VSMOW to water d18O VSMOW
+			df['d18O_VPDB_mineral']  = round(df['d18O_VPDB_mineral'],1)
 
 		else:
-			df['d18O_VPDB_mineral'] = round(((df['d18O_VSMOW'] - 1000*np.log(1.00871) - 30.92)/1.03092), 1) # convert from CO2 d18O (VSMOW) to calcite d18O (VPDB) if mineralogy not specified
-			d18Ow_VSMOW = round(df['d18O_VSMOW'] - eps - 1000*np.log(1.00871),1) # convert from CO2  d18O VSMOW to water d18O VSMOW using Kim and O'Neil (1997)
+			df['d18O_VPDB_mineral'] = ((df['d18O_VSMOW'] - 1000*np.log(1.00871) - 30.92)/1.03092) # convert from CO2 d18O (VSMOW) to calcite d18O (VPDB) if mineralogy not specified
+			d18Ow_VSMOW = ((1/alpha)*(df['d18O_VSMOW_mineral'] + 1000)) - 1000 # convert from CO2  d18O VSMOW to water d18O VSMOW
+			df['d18O_VPDB_mineral']  = round(df['d18O_VPDB_mineral'],1)
 
 		return d18Ow_VSMOW
 
-	df['d18Ow_VSMOW_KON97'] = calc_d18Ow(eps_KON97)
-	df['d18Ow_VSMOW_KON97_upper'] = round(abs(df['d18Ow_VSMOW_KON97'] - calc_d18Ow(eps_KON97_upper)), 1)
-	df['d18Ow_VSMOW_KON97_lower'] = round(abs(df['d18Ow_VSMOW_KON97'] - calc_d18Ow(eps_KON97_lower)), 1)
 
-	df['d18Ow_VSMOW_A21'] = calc_d18Ow(eps_A21)
-	df['d18Ow_VSMOW_A21_upper'] = round(abs(df['d18Ow_VSMOW_A21'] - calc_d18Ow(eps_A21_upper)), 1)
-	df['d18Ow_VSMOW_A21_lower'] = round(abs(df['d18Ow_VSMOW_A21'] - calc_d18Ow(eps_A21_lower)), 1)	
+	# -- Modified from Kristin (consider making a function!) --
+
+	 # This one takes also mineralogy as an arguments because it has to choose between A21(calcite)/H14(dolomite)
+	a_A21_H14 = make_water(df['T_MIT'],df['Mineralogy'])
+	a_A21_H14_upper = make_water(T_MIT_95CL_upper_val,df['Mineralogy'])
+	a_A21_H14_lower = make_water(T_MIT_95CL_lower_val,df['Mineralogy'])
+
+	a_MK77 = make_water_MK77(df['T_MIT'])
+	a_MK77_upper = make_water_MK77(T_MIT_95CL_upper_val)
+	a_MK77_lower = make_water_MK77(T_MIT_95CL_lower_val)
+	
+	a_H14 = make_water_H14(df['T_MIT'])
+	a_H14_upper = make_water_H14(T_MIT_95CL_upper_val)
+	a_H14_lower = make_water_H14(T_MIT_95CL_lower_val)
+	
+	a_V05 = make_water_V05(df['T_MIT'])
+	a_V05_upper = make_water_V05(T_MIT_95CL_upper_val)
+	a_V05_lower = make_water_V05(T_MIT_95CL_lower_val)
+	
+	a_KON97 = make_water_KON97(df['T_MIT'])
+	a_KON97_upper = make_water_KON97(T_MIT_95CL_upper_val)
+	a_KON97_lower = make_water_KON97(T_MIT_95CL_lower_val)
+
+	a_A21 = make_water_A21(df['T_MIT'])
+	a_A21_upper = make_water_A21(T_MIT_95CL_upper_val)
+	a_A21_lower = make_water_A21(T_MIT_95CL_lower_val)
+
+
+	df['d18Ow_VSMOW'] = round(calc_d18Ow_alpha(a_A21_H14),1)
+	df['d18Ow_VSMOW_upper'] = round(abs(df['d18Ow_VSMOW'] - calc_d18Ow_alpha(a_A21_H14_upper)), 1)
+	df['d18Ow_VSMOW_lower'] = round(abs(df['d18Ow_VSMOW'] - calc_d18Ow_alpha(a_A21_H14_lower)), 1)
+
+
+	df['d18Ow_VSMOW_MK77'] = round(calc_d18Ow_alpha(a_MK77),1)
+	df['d18Ow_VSMOW_MK77_upper'] = round(abs(df['d18Ow_VSMOW_MK77'] - calc_d18Ow_alpha(a_MK77_upper)), 1)
+	df['d18Ow_VSMOW_MK77_lower'] = round(abs(df['d18Ow_VSMOW_MK77'] - calc_d18Ow_alpha(a_MK77_lower)), 1)
+
+	df['d18Ow_VSMOW_H14'] = round(calc_d18Ow_alpha(a_H14),1)
+	df['d18Ow_VSMOW_H14_upper'] = round(abs(df['d18Ow_VSMOW_H14'] - calc_d18Ow_alpha(a_H14_upper)), 1)
+	df['d18Ow_VSMOW_H14_lower'] = round(abs(df['d18Ow_VSMOW_H14'] - calc_d18Ow_alpha(a_H14_lower)), 1)	
+	
+	df['d18Ow_VSMOW_V05'] = round(calc_d18Ow_alpha(a_V05),1)
+	df['d18Ow_VSMOW_V05_upper'] = round(abs(df['d18Ow_VSMOW_V05'] - calc_d18Ow_alpha(a_V05_upper)), 1)
+	df['d18Ow_VSMOW_V05_lower'] = round(abs(df['d18Ow_VSMOW_V05'] - calc_d18Ow_alpha(a_V05_lower)), 1)
+
+	df['d18Ow_VSMOW_KON97'] = round(calc_d18Ow_alpha(a_KON97),1)
+	df['d18Ow_VSMOW_KON97_upper'] = round(abs(df['d18Ow_VSMOW_KON97'] - calc_d18Ow_alpha(a_KON97_upper)), 1)
+	df['d18Ow_VSMOW_KON97_lower'] = round(abs(df['d18Ow_VSMOW_KON97'] - calc_d18Ow_alpha(a_KON97_lower)), 1)
+
+	df['d18Ow_VSMOW_A21'] = round(calc_d18Ow_alpha(a_A21),1)
+	df['d18Ow_VSMOW_A21_upper'] = round(abs(df['d18Ow_VSMOW_A21'] - calc_d18Ow_alpha(a_A21_upper)), 1)
+	df['d18Ow_VSMOW_A21_lower'] = round(abs(df['d18Ow_VSMOW_A21'] - calc_d18Ow_alpha(a_A21_lower)), 1)
+
+	df_anal['T_MIT'] = df_anal['D47'].map(calc_MIT_temp)
 
 	df_batch = pd.DataFrame(batch_data_list, columns = ['UID', 'Transducer_Pressure', 'Sample_Weight', 'NuCarb_temp','Pumpover_Pressure',
 		'Init_Sam_beam', 'Balance', 'Vial_Location', 'd13C_SE (Nu)', 'd18O_SE (Nu)', 'D47_SE (Nu)', 'd47_pre_SE', 'd47_post_SE', 'Bad_Cycles'])
 
-	df_anal['T_MIT'] = df_anal['D47'].map(calc_MIT_temp)
-	eps_KON97 = df_anal['T_MIT'].map(make_water_KON97)
-	eps_A21 = df_anal['T_MIT'].map(make_water_A21)
+
+	df_anal = df_anal.merge(df_meta, how = 'left', on = 'Sample')
+	df_anal = df_anal.merge(df_batch, how = 'left', on = 'UID')
+
+	a_A21_H14 = make_water(df_anal['T_MIT'],df_anal['Mineralogy'])
+	a_KON97 = df_anal['T_MIT'].map(make_water_KON97)
+	a_A21 = df_anal['T_MIT'].map(make_water_A21)
+	a_H14 = df_anal['T_MIT'].map(make_water_H14)
 
 	df_anal['T_MIT'] = round(df_anal['T_MIT'], 1)
 
 	if 'Mineralogy' in df_anal.columns:
-		df_anal['d18O_VPDB_mineral'] = round(((df_anal['d18O_VSMOW'] - list(map(thousandlna, df_anal['Mineralogy']))) - 30.92)/1.03092, 1) # convert from CO2 d18O (VSMOW) to mineral d18O (VPDB)
-		df_anal['d18O_water_VSMOW_KON97'] = round(df_anal['d18O_VSMOW'] - eps_KON97 - list(map(thousandlna, df_anal['Mineralogy'])),1) # convert from CO2  d18O VSMOW to water d18O VSMOW
-		df_anal['d18O_water_VSMOW_A21'] = round(df_anal['d18O_VSMOW'] - eps_A21 - list(map(thousandlna, df_anal['Mineralogy'])),1) # convert from CO2  d18O VSMOW to water d18O VSMOW
-
-	else:
-		df_anal['d18O_VPDB_mineral'] = round(((df_anal['d18O_VSMOW'] - 1000*np.log(1.00871) - 30.92)/1.03092), 1) # convert from CO2 d18O (VSMOW) to calcite d18O (VPDB) if mineralogy not specified
-		df_anal['d18O_water_VSMOW_KON97'] = round(df_anal['d18O_VSMOW'] - eps_KON97 - 1000*np.log(1.00871),1) # convert from CO2  d18O VSMOW to water d18O VSMOW
-		df_anal['d18O_water_VSMOW_A21'] = round(df_anal['d18O_VSMOW'] - eps_A21 - 1000*np.log(1.00871),1) # convert from CO2  d18O VSMOW to water d18O VSMOW
+		df_anal['d18O_VPDB_mineral'] = ((df_anal['d18O_VSMOW'] - list(map(thousandlna, df_anal['Mineralogy']))) - 30.92)/1.03092 # convert from CO2 d18O (VSMOW) to mineral d18O (VPDB)
+		df_anal['d18Ow_VSMOW'] = round(((1/a_A21_H14)*(df_anal['d18O_VSMOW'] + 1000)) - 1000,1) # convert from CO2  d18O VSMOW to water d18O VSMOW,1) # convert from CO2  d18O VSMOW to water d18O VSMOW
+		df_anal['d18Ow_VSMOW_KON97'] = round(((1/a_KON97)*(df_anal['d18O_VSMOW'] + 1000)) - 1000,1) # convert from CO2  d18O VSMOW to water d18O VSMOW
+		df_anal['d18Ow_VSMOW_A21'] = round(((1/a_A21)*(df_anal['d18O_VSMOW'] + 1000)) - 1000,1) # convert from CO2  d18O VSMOW to water d18O VSMOW
+		df_anal['d18Ow_VSMOW_H14'] = round(((1/a_H14)*(df_anal['d18O_VSMOW'] + 1000)) - 1000,1) # convert from CO2  d18O VSMOW to water d18O VSMOW
 		
-	df_anal = df_anal.merge(df_meta, how = 'left', on = 'Sample')
-	df_anal = df_anal.merge(df_batch, how = 'left', on = 'UID')
 
 	n_bad_cycles = df_anal['Bad_Cycles'].sum()
 	print('Total # bad cycles removed = ', n_bad_cycles, '(', round((n_bad_cycles/(len(df_anal)*60))*100, 2), '%)') # does not include bad cycles from disabled reps
@@ -667,15 +747,43 @@ def add_metadata(dir_path, rptability, batch_data_list, df, df_anal):
 		df_anal['pct_evolved_carbonate'].iloc[j] = calc_pct_evolv_carb(df_anal['Mineralogy'].iloc[j], df_anal['Transducer_Pressure'].iloc[j], df_anal['Sample_Weight'].iloc[j], sess_eth4_tp_dict[df_anal['Session'].iloc[j]])
 
 
-
-
 	mean_pct_carb, resid = calc_residual(df_anal)
 	df_anal['D47_residual'] = resid
 	df_anal['d47_VPDB'] = df_anal['d13C_VPDB'] + df_anal['d18O_VPDB_mineral']
 	df['d47_VPDB'] = df['d13C_VPDB'] + df['d18O_VPDB_mineral']
 	df['mean_pct_carb'] = round(mean_pct_carb,1)
 
+
+	# --- Clean up and rearrange summary file ---
+
+	df = df.drop(columns = ['p_Levene', 'd18O_VSMOW']) # remove these -- not really used
+
+
+	df['T_MIT'] = round(df['T_MIT'], 1)
+	df['d18O_VSMOW_mineral'] = round(df['d18O_VSMOW_mineral'], 1)
+
+
+	# Reorder output
+	
+	meta_cols = df_meta.drop(columns = ['Sample']).columns
+
+
+	col_order_list = ['Sample', 'N', 'mean_pct_carb', 'd13C_VPDB', 'd18O_VPDB_mineral', 'd18Ow_VSMOW', 
+		'd18Ow_VSMOW_lower', 'd18Ow_VSMOW_upper', 'D47', 'SE', 'SD', 'CL_95_pct', 'T_MIT', 
+		'T_MIT_95CL_lower', 'T_MIT_95CL_upper']
+
+	col_order_list.extend(list(meta_cols))
+
+	col_order_list.extend(['T_Petersen', 'd47_VPDB', 'd18Ow_VSMOW_MK77', 'd18Ow_VSMOW_MK77_upper',
+		'd18Ow_VSMOW_MK77_lower', 'd18Ow_VSMOW_H14', 'd18Ow_VSMOW_H14_upper', 'd18Ow_VSMOW_H14_lower',
+		'd18Ow_VSMOW_H14_lower', 'd18Ow_VSMOW_V05', 'd18Ow_VSMOW_V05_upper', 'd18Ow_VSMOW_V05_lower', 
+		'd18Ow_VSMOW_KON97', 'd18Ow_VSMOW_KON97_upper', 'd18Ow_VSMOW_KON97_lower', 'd18Ow_VSMOW_A21', 'd18Ow_VSMOW_A21',
+		'd18Ow_VSMOW_A21_upper', 'd18Ow_VSMOW_A21_lower'])
+
+	df = df[col_order_list]
+
 	df.to_csv(Path.cwd() / 'results' / f'summary_{proj}.csv', index = False)
+
 	df_anal.to_csv(Path.cwd() / 'results' / f'analyses_{proj}.csv', index = False)
 	to_earthchem(df_anal)
 
