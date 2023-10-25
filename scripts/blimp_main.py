@@ -28,11 +28,19 @@ import blimp_supp as b_s
 
 os.chdir(dir_path)
 
+##################### WORKING HERE IN params_testing.py
+# Directory where 'params' file is stored
+params_loc = input("Enter path to params file from %s (omit first /):" %Path.cwd())
+params_dir = Path.cwd() / params_loc
+# check that params file is actually there
 
+#####################
+
+# Create results and plot directories if they do not already exist
 
 rd_path = Path.cwd() / 'raw_data'
-results_path = Path.cwd() / ('results')
-plot_path = Path.cwd() / ('plots')
+results_path = Path.cwd() / ('results') # do the parentheses do anything? I don't think so. 
+plot_path = Path.cwd() / ('plots')i
 
 if os.path.isdir(results_path):
 	pass 
@@ -47,6 +55,8 @@ else:
 d47_crunch_fmt = []
 batch_data_list = []
 fold_count = 0
+
+# Remove analyses first (based on params file)
 
 df_rmv = pd.read_excel('params.xlsx', 'Remove')
 manual_rmv = list(df_rmv.UID)
