@@ -4,7 +4,7 @@
 import os
 import pandas as pd
 from pathlib import Path
-#import make_pdf as mk_pdf
+import make_pdf as mk_pdf
 
 output_sep = '------------------------'
 
@@ -68,8 +68,9 @@ if os.path.isdir(rd_path): # If there is a raw data folder...
 				break
 
 			for file in os.listdir(Path.cwd() / 'raw_data' / folder):
+
 				if 'Data' in file and '.txt' in file and '.fail' not in file:
-					file_path = rd_path / folder / file					
+					file_path = rd_path / folder / file		
 					if os.path.getsize(file_path) > 225000 or run_type == 'standard':	# Make sure .txt file is complete					
 						file_n = int(file[5:10]) # get UID from file name
 						samp_name = str(file[10:-4]) # get sample number from file name
@@ -81,6 +82,7 @@ if os.path.isdir(rd_path): # If there is a raw data folder...
 								batch_data_list.append(batch_data)
 
 				fold_count += 1
+
 		else: print('   Ignoring ', folder)
 
 df_d47 = pd.DataFrame(d47_crunch_fmt, columns = ['UID', 'Session', 'Sample', 'd45', 'd46', 'd47', 'd48', 'd49'])
@@ -109,10 +111,14 @@ if run_type == 'clumped':
 	b_s.d47_D47_plot(df)
 	b_s.interactive_plots(df)
 	b_s.joy_plot()
+	b_s.D48_plot(df_sam)
 
 elif run_type == 'standard':
-	b_s.add_metadata_std()
-#mk_pdf.run_mk_pdf()
+	b_s.add_metadata_std(batch_data_list)
+
+	df = pd.read_csv(Path.cwd().parents[0]/ proj / 'results' / f'analyses_bulk_{proj}.csv')
+	b_s.std_plots(df)
+#mk_pdf.run_mk_pdf(proj)
 
 print(output_sep)
 print('SCRIPT COMPLETE.')
