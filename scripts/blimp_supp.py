@@ -1,4 +1,4 @@
-# --- VERSION 0.1.7 updated 20230517 by NTA ---
+# --- VERSION 0.1.8 updated 20240113 by NTA ---
 
 import pandas as pd
 import numpy as np
@@ -7,6 +7,21 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import seaborn as sns
 import time
+
+try:
+	from bokeh.io import output_file
+	from bokeh.io import save
+	from bokeh.plotting import figure, show, ColumnDataSource
+	from bokeh.models.tools import HoverTool
+	from bokeh.layouts import row
+	import bokeh.models as bmo
+	from bokeh.palettes import d3
+	from bokeh.transform import jitter
+	
+except ModuleNotFoundError:
+	print('Bokeh package not found. Install Bokeh for interactive plots.')
+
+
 
 
 # get name of project
@@ -161,24 +176,16 @@ def calc_residual(df_analy):
 
 	return pct_evolved_carb, resid
 
+dol_carb_scaler = 1 + (((100.087*2) - (84.314 + 100.087))/(100.087*2)) # mw 2x caco3 minus (mw mgco3 + mw caco3)
 
+def calc_pct_evolv_carb(mineral, transduc_press, samp_weight, mbar_mg_eth):
 
+	pct_evolved_carb = ((transduc_press/samp_weight)/mbar_mg_eth)*100
+	if mineral == 'Dolomite':
+		return round(pct_evolved_carb/dol_carb_scaler,1)
+	else:
+		return round(pct_evolved_carb,1)
 
-
-
-# ---- Define helper functions ----
-
-# import fnmatch
-# def find_file(pattern, path):  # DOESNT WORK YET -- MIGHT BE MORE EFFICIENT
-# 	result = []
-# 	for files in os.walk(path):
-# 		print(files)
-# 		if isinstance(files, str):
-# 			print(files)
-# 			if fnmatch.fnmatch(files, pattern):
-# 				print('found')
-# 				result.append(os.path.join(root, files))
-# 	return result
 
 # ---- READ AND CORRECT DATA ----
 
@@ -192,20 +199,57 @@ def read_Nu_data(data_file, file_number, current_sample, folder_name, run_type):
 	bad_count = 0 # Keeps track of bad cycles (cycles > 5 SD from sample mean)
 	bad_rep_count = 0 # Keeps track of bad replicates
 
+	# Just read in the first row of a data file to get the data version #
+	df = pd.read_csv(data_file, nrows = 1, header = None)
+	nu_file_version = int(df.iloc[0][0][-2:])
+	
+
+	# file_num 1183, Nu file version 9 (skip 29)
+	# file num 4006, v 10 (skip 30)
+	# 10253, v 12 (skip 31)
+	# 20414, v 14 (skip 31, split)
+	# by 20858, we're back to v12, but not sure exactly where
+	# 21867 is still v12
+	# 21868 is v14
+
+	if nu_file_version == 9: n_skip = 31
+	elif nu_file_version == 10: n_skip = 30
+	elif nu_file_version == 12: n_skip = 31
+	elif nu_file_version == 14: n_skip = 31
+	else:
+		print(f'Nu File Version {nu_file_version} not recognized. Will default to Version 14; may throw error.')
+		n_skip = 31
+
+
+
    # -- Read in file --
    # Deals with different .txt file formats starting at UID 1899, 9628 (Nu software updates)
-	if file_number > 9628: n_skip = 31
-	elif file_number < 1899: n_skip = 29
-	else: n_skip = 30
+	# if file_number > 9628: n_skip = 31
+	# elif file_number < 1899: n_skip = 29
+	# else: n_skip = 30
 
 	try:	
 		df = pd.read_fwf(data_file, skiprows = n_skip, header = None) # Read in file, skip n_skip rows, no header
+		#df = pd.read_csv(data_file, sep=" ", skiprows = n_skip, header = None)
 	except NameError:
 		print('Data file not found for UID', file_number)
 
 	# -- Clean up data -- 
 	df = df.drop(columns = [0]) # removes first column (full of zeros)
 	df = df.dropna(how = 'any')
+
+	# COMMENT THIS OUT UNLESS late sept/early oct 2023 data
+	if nu_file_version == 14: # DEALS WITH NU VERSION 1.72.5 (same as Version 14 for the data files)
+		df = df.astype('str') # make sure data is read as floats
+		df[20] = np.zeros(len(df))
+		splits = df[6].str.split(' ',expand=True)
+		df[6] = splits[0].str.strip()
+		df[20] = splits[2].str.strip()
+		df = df.astype('float64') # make sure data is read as floats
+
+	#print(file_number)
+	#print(df)
+
 	df = df.astype('float64') # make sure data is read as floats
 	df = df[(df.T != 0).any()] # remove all zeroes; https://stackoverflow.com/questions/22649693/drop-rows-with-all-zeros-in-pandas-data-frame	
 	df = df.reset_index(drop = 'True')
@@ -299,6 +343,7 @@ def read_Nu_data(data_file, file_number, current_sample, folder_name, run_type):
 
 	# Calculate median of all cycles.
 	median_47 = df_lil_del['d47'].median()
+	median_48 = df_lil_del['d48'].median()
 	d47_pre_SE = df_lil_del['d47'].sem()
 	 
 	# -- FIND BAD CYCLES --  
@@ -315,6 +360,18 @@ def read_Nu_data(data_file, file_number, current_sample, folder_name, run_type):
 				df_lil_del['d49'].iloc[i] = np.nan	
 
 				bad_count += 1
+
+			# do the same for 48; for now, SD_thresh for 48 just set to double 47. Incorrect but reasonable.
+			# elif (df_lil_del['d48'].iloc[i]) > ((median_48) + (SD_thresh*2)) or ((df_lil_del['d48'].iloc[i]) < ((median_48) - (SD_thresh*2))):
+			# 	df_lil_del['d45'].iloc[i] = np.nan # 'Disables' cycle; sets value to nan
+			# 	df_lil_del['d46'].iloc[i] = np.nan
+			# 	df_lil_del['d47'].iloc[i] = np.nan
+			# 	df_lil_del['d48'].iloc[i] = np.nan
+			# 	df_lil_del['d49'].iloc[i] = np.nan
+			# 	print('cycles removed b/c bad 48')
+
+			# 	bad_count += 1
+
 
 	session = str(folder_name[:8]) # creates name of session; first 8 characters of folder name are date of run start per our naming convention (e.g., 20211008 clumped apatite NTA = 20211008) 
 	
@@ -337,12 +394,18 @@ def read_Nu_data(data_file, file_number, current_sample, folder_name, run_type):
 
 			curr_row = df_results_summ.loc[df_results_summ['Data_File'].str.contains(str(file_number), na = False)].index
 
-			batch_data_list = [file_number, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, d47_pre_SE, d47_post_SE, bad_count]
-			if len(curr_row) == 1 and run_type == 'clumped': # curr_row is Int64Index, which acts like a list. If prev line finds either 0 or 2 matching lines, it will skip this section.
-				transduc_press = float(df_results_summ['Transducer_Pressure'][curr_row])				
+			batch_data_list = [file_number, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, d47_pre_SE, d47_post_SE, bad_count]
+			if len(curr_row) == 1:# and run_type == 'clumped': # curr_row is Int64Index, which acts like a list. If prev line finds either 0 or 2 matching lines, it will skip this section.
+				# for i in df_results_summ.columns: print(i)
+				# print(df_results_summ.columns)
+				transduc_press = float(df_results_summ['Transducer_Pressure'][curr_row])
+				time = df_results_summ['Time_Collected'][curr_row]
 				samp_weight = float(df_results_summ['Sample_Weight'][curr_row])
 				NuCarb_temp = float(df_results_summ['Ave_Temperature'][curr_row])
-				pumpover = float(df_results_summ['MaxPumpOverPressure_'][curr_row])
+				try:
+					pumpover = float(df_results_summ['MaxPumpOverPressure_'][curr_row])
+				except(KeyError):
+					pumpover = float(df_results_summ['MaxPumpOverPressure_Unnamed: 16_level_1'][curr_row])
 				init_beam = float(df_results_summ['Initial_Sam Beam'][curr_row])
 				balance = float(df_results_summ['Balance_%'][curr_row])
 				vial_loc = float(df_results_summ['Vial_Location'][curr_row])
@@ -350,23 +413,24 @@ def read_Nu_data(data_file, file_number, current_sample, folder_name, run_type):
 				d18O_SE = float(df_results_summ['Std_Err.6'][curr_row])
 				D47_SE = float(df_results_summ['Std_Err.7'][curr_row])
 
-				batch_data_list = [file_number, transduc_press, samp_weight, NuCarb_temp, pumpover, init_beam, balance, vial_loc, d13C_SE, d18O_SE, D47_SE, d47_pre_SE, d47_post_SE, bad_count]
+				batch_data_list = [file_number, time, transduc_press, samp_weight, NuCarb_temp, pumpover, init_beam, balance, vial_loc, d13C_SE, d18O_SE, D47_SE, d47_pre_SE, d47_post_SE, bad_count]
 
 				# Remove any replicates that fail thresholds, compile a message that will be written to the terminal
-				if transduc_press < transducer_pressure_thresh:
-					rmv_analyses.append(file_number)
-					rmv_msg.append((str(rmv_analyses[0]) + ' ' + str(current_sample) + ' failed transducer pressure requirements (transducer_pressure = ' + str(round(transduc_press,1)) + ')' ))
-				if balance > balance_high or balance < balance_low:
-					rmv_analyses.append(file_number)
-					rmv_msg.append((str(rmv_analyses[0]) + ' ' + str(current_sample) + ' failed balance requirements (balance = ' +  str(round(balance,1)) + ')'))
-				if bad_count > bad_count_thresh:
-					rmv_analyses.append(file_number)
-					rmv_msg.append((str(rmv_analyses[0]) + ' ' + str(current_sample) + ' failed cycle-level reproducibility requirements (bad cycles = ' + str(bad_count) + ')'))
+				if run_type == 'clumped':
+					if transduc_press < transducer_pressure_thresh:
+						rmv_analyses.append(file_number)
+						rmv_msg.append((str(rmv_analyses[0]) + ' ' + str(current_sample) + ' failed transducer pressure requirements (transducer_pressure = ' + str(round(transduc_press,1)) + ')' ))
+					if balance > balance_high or balance < balance_low:
+						rmv_analyses.append(file_number)
+						rmv_msg.append((str(rmv_analyses[0]) + ' ' + str(current_sample) + ' failed balance requirements (balance = ' +  str(round(balance,1)) + ')'))
+					if bad_count > bad_count_thresh:
+						rmv_analyses.append(file_number)
+						rmv_msg.append((str(rmv_analyses[0]) + ' ' + str(current_sample) + ' failed cycle-level reproducibility requirements (bad cycles = ' + str(bad_count) + ')'))
 
 			break # Found a matching file? There only should be one, so stop here.
 
 		else: # Couldn't find matching UID, or got confused. No batch summary data included.
-			batch_data_list = [file_number, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, d47_pre_SE, d47_post_SE, bad_count]
+			batch_data_list = [file_number, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, d47_pre_SE, d47_post_SE, bad_count]
 	
 	# If replicate doesn't fail any thresholds, calculate the mean lil delta and return as a list
 	if bad_count < bad_count_thresh and file_number not in rmv_analyses:
@@ -395,6 +459,7 @@ def fix_names(df):
 	
 	df['Sample'] = df['Sample'].str.strip() # strip whitespace
 	df_new = pd.read_excel(xls, 'Names_to_change')
+
 	
 	# rename based on name (names_to_change; i.e. EHT-1 --> ETH-1)
 	for i in range(len(df_new)):
@@ -436,11 +501,9 @@ def run_D47crunch(run_type, raw_deltas_file):
 	#xls = pd.ExcelFile(Path.cwd() / 'params.xlsx')
 	df_anc = pd.read_excel(xls, 'Anchors', index_col = 'Anchor')
 	Nominal_D47 = df_anc.to_dict()['D47'] # Sets anchor values for D47crunch as dictionary {Anchor: value}
-
-
+	
 	data = D47crunch.D47data()
 	data.Nominal_D47 = Nominal_D47
-
 	print('Anchors are ', data.Nominal_D47)	# list anchors used and their nominal D47
 	data.ALPHA_18O_ACID_REACTION = calc_a18O # This is selected from the params file -- you can use whatever value you want in there.
 
@@ -449,11 +512,14 @@ def run_D47crunch(run_type, raw_deltas_file):
 	# 	data.SAMPLE_CONSTRAINING_WG_COMPOSITION = ('ETH-1', 2.02, -2.19) # oftentimes for standard racks, we don't use ETH-3, so this uses ETH-1 as the anchor
 	# elif run_type == 'clumped':
 	data.SAMPLE_CONSTRAINING_WG_COMPOSITION = ('ETH-3', 1.71, -1.78)
-
+	data.Nominal_d13C_VPDB = {'ETH-1': 2.02, 'ETH-2': -10.17, 'ETH-3': 1.71, 'ETH-4': -10.20,'IAEA-C1': 2.42,'IAEA-C2': -8.25, 'CIT': 2.05} # CIT Data from Anderson et al. (2024) Table 2
+	data.Nominal_d18O_VPDB = {'ETH-1': -2.19, 'ETH-2': -18.69, 'ETH-3': -1.78, 'ETH-4': -18.81,'IAEA-C1': -2.31, 'IAEA-C2': -8.94, 'CIT':-1.40}
+	
 	print('Sample constraining WG composition = ', data.SAMPLE_CONSTRAINING_WG_COMPOSITION)
+	print('Sample constraining nominal d13C = ', data.Nominal_d13C_VPDB)
 	#data.read(Path.cwd() / 'results' / raw_deltas_file) # INPUT
 	data.read(raw_deltas_file) # INPUT	
-
+	
 	n_anal = len(data)
 	n_samp = len({r["Sample"] for r in data})
 	n_sess = len({r["Session"] for r in data})
@@ -467,10 +533,29 @@ def run_D47crunch(run_type, raw_deltas_file):
 
 	data.wg()
 	data.crunch()
-
+	
 	if run_type == 'clumped':
+
+		# do all of above for D48
+		# D47CRUNCH SETS D48 VALUES BASED ON FIEBIG 2021; don't actually need new column in
+		data_48 = D47crunch.D48data()
+		data_48.ALPHA_18O_ACID_REACTION = calc_a18O 
+		data_48.SAMPLE_CONSTRAINING_WG_COMPOSITION = ('ETH-3', 1.71, -1.78)
+		data_48.read(raw_deltas_file) # INPUT	
+		data_48.wg()
+		data_48.crunch()
+
+		print(data_48.Nominal_D48)
+
 		data.standardize()
+		print(pd.DataFrame(data_48).info(verbose = True))
+		data_48.standardize()
+
 		repeatability_all = data.repeatability['r_D47']
+		repeatability_D48 = data_48.repeatability['r_D48']
+
+		print(f'D48 repeatability = {repeatability_D48*1000} ppm')
+
 		rpt_d13C = data.repeatability['r_d13C_VPDB']
 		rpt_d18O = data.repeatability['r_d18O_VSMOW']
 
@@ -478,16 +563,24 @@ def run_D47crunch(run_type, raw_deltas_file):
 		data.table_of_sessions(verbose = True, print_out = True, dir = results_path, filename = f'sessions_{proj}.csv', save_to_file = True)
 		
 		sam = data.table_of_samples(verbose = True, print_out = True, save_to_file = False, output = 'raw')
+		sam_48 = data_48.table_of_samples(verbose = True, print_out = False, dir = results_path, filename = f'D48_sample_{proj}.csv', save_to_file = False, output = 'raw')
+
 		analy = data.table_of_analyses(print_out = False, save_to_file = False, output = 'raw')
 		#data.plot_sessions(dir = Path.cwd() / 'plots' / 'session_plots') # Issue on everyones computer but Noah's...
 
 		# send sample and analyses to pandas dataframe, clean up
 		df_sam = pd.DataFrame(sam[1:], columns = sam[0]).replace(r'^\s*$', np.nan, regex=True)  #import as dataframe, replace empty strings with NaN
 		df_sam['95% CL'] = df_sam['95% CL'].str[2:] # clean up plus/minus signs
+
+		df_sam_48 = pd.DataFrame(sam_48[1:], columns = sam_48[0]) #import as dataframe, replace empty strings with NaN
+		df_sam_48 = df_sam_48.drop(labels = ['N', 'd13C_VPDB', 'd18O_VSMOW', 'SE', '95% CL', 'SD', 'p_Levene'], axis = 1)
+
+		# merge 47 df with D48 column from df 48 (on Sample)
+		df_sam = pd.merge(df_sam, df_sam_48, on = 'Sample')
 		df_sam = df_sam.astype({'Sample':'str', 'N':'int32', 'd13C_VPDB':'float64', 'd18O_VSMOW':'float64', 'D47':'float64','SE':'float64', 
-						'95% CL':'float64', 'SD':'float64', 'p_Levene':'float64'}) #recast types appropriately (all str by default)
+						'95% CL':'float64', 'SD':'float64', 'p_Levene':'float64', 'D48': 'float64'}) #recast types appropriately (all str by default)
 		df_sam = df_sam.rename(columns = {'95% CL': 'CL_95_pct'})
-		
+
 		df_analy = pd.DataFrame(analy[1:], columns = analy[0]).replace(r'^\s*$', np.nan, regex=True)  #import as dataframe, replace empty strings with NaN
 		df_analy = df_analy.astype({'UID':'int32', 'Session':'int32', 'Sample':'str', 'd13Cwg_VPDB':'float64', 
 			'd18Owg_VSMOW':'float64', 'd45':'float64', 'd46':'float64', 'd47':'float64', 'd48':'float64', 
@@ -498,20 +591,20 @@ def run_D47crunch(run_type, raw_deltas_file):
 		manual_rmv = list(df_rmv.UID)
 		manual_rmv_reason = list(df_rmv.Notes)
 
-		#Create a little dictionary to store info about the project
-		#NOAH -- makes this smarter so will accept other anchors dynamically
-		# summ_dict = {'n_sessions':n_sess, 'n_samples':n_samp, 'n_analyses':n_anal,
-		# 'Nominal_D47_ETH-1':data.Nominal_D47['ETH-1'], 'Nominal_D47_ETH-2':data.Nominal_D47['ETH-2'],
-		# 'Nominal_D47_ETH-3':data.Nominal_D47['ETH-3'], 'Nominal_D47_ETH-4':data.Nominal_D47['ETH-4'],
-		# 'Nominal_D47_IAEA-C2':data.Nominal_D47['IAEA-C2'], 'Nominal_D47_MERCK':data.Nominal_D47['MERCK'],
-		# 'Reprod_d13C': rpt_d13C, 'Reprod_d18O':rpt_d18O, 'Reprod_D47':repeatability_all, 'Long_term_SD_threshold':long_term_d47_SD, 
-		# 'Num_SD_threshold':num_SD, 'Bad_cycles_threshold':bad_count_thresh, 'Transducer_pressure_threshold': transducer_pressure_thresh,
-		# 'Balance_high_threshold':balance_high,'Balance_low_threshold':balance_low, 'Manually_removed':manual_rmv, 'Manually_removed_reason': manual_rmv_reason}
 
-		# df_prj_summ = pd.DataFrame([summ_dict], index = [0])
-		# # df_prj_summ['Manually_removed'] = df_rmv['UID']
-		# # df_prj_summ['Manually_removed_reason'] = df_rmv['Notes']
-		# df_prj_summ.to_csv(Path.cwd()/ 'results' / 'project_info.csv', index = False)	
+		# create a dictionary to store info about the project (project_info)
+
+		summ_dict = {'n_sessions':n_sess, 'n_samples':n_samp, 'n_analyses':n_anal,
+		'Reprod_d13C': rpt_d13C, 'Reprod_d18O':rpt_d18O, 'Reprod_D47':repeatability_all, 'Long_term_SD_threshold':long_term_d47_SD, 
+		'Num_SD_threshold':num_SD, 'Bad_cycles_threshold':bad_count_thresh, 'Transducer_pressure_threshold': transducer_pressure_thresh,
+		'Balance_high_threshold':balance_high,'Balance_low_threshold':balance_low, 'Manually_removed':manual_rmv, 'Manually_removed_reason': manual_rmv_reason}
+
+		for i in Nominal_D47.keys():
+			summ_dict[f'Nominal_D47_{i}'] = data.Nominal_D47[i]
+
+
+		df_prj_summ = pd.DataFrame([summ_dict], index = [0])
+		df_prj_summ.to_csv(Path.cwd()/ 'results' / 'project_info.csv', index = False)	
 
 		print('Anchors are ', data.Nominal_D47)	# list anchors used and their nominal D47
 
@@ -522,10 +615,9 @@ def run_D47crunch(run_type, raw_deltas_file):
 		print('Total # analyses removed automatically = ', len(rmv_meta_list), '(', round((len(rmv_meta_list)/n_anal)*100,1), '% of total)')
 
 		# For reps that failed, make csv with all parameters they could have failed on
-		df = pd.DataFrame(rmv_meta_list, columns = ['UID', 'Transducer_Pressure', 'Sample_Weight', 'NuCarb_temp', 'Pumpover_Pressure', 'Initial_Sam', 'Balance', 'Vial_Location', 'd13C_SE (Nu)', 'd18O_SE (Nu)', 'D47_SE (Nu)', 'd47_pre_SE', 'd47_post_SE', 'Bad_count', 'Sample'])
+		df = pd.DataFrame(rmv_meta_list, columns = ['UID', 'Time_Collected', 'Transducer_Pressure', 'Sample_Weight', 'NuCarb_temp', 'Pumpover_Pressure', 'Initial_Sam', 'Balance', 'Vial_Location', 'd13C_SE_Nu', 'd18O_SE_Nu', 'D47_SE_Nu', 'd47_pre_SE', 'd47_post_SE', 'Bad_count', 'Sample'])
 		save_path =  Path.cwd() / 'results' / f'rmv_analyses_{proj}.csv'
 		df.to_csv(save_path, index = False)
-
 
 		return df_sam, df_analy, repeatability_all
 
@@ -547,6 +639,10 @@ def table_of_analyses_std(data, dir = 'results', filename = f'analyses_{proj}.cs
         + `print_out`: whether to print out the table
         '''
         from D47crunch import make_csv
+
+        # data.standardize_d13C() # adding these lines makes no difference to final values; I think it's done already by .D47data()
+        # data.standardize_d18O()
+
         out = [['UID','Session','Sample']]
        
         out[-1] += ['d13Cwg_VPDB','d18Owg_VSMOW','d45','d46','d47','d48','d49','d13C_VPDB','d18O_VSMOW']
@@ -625,12 +721,12 @@ def add_metadata(dir_path, rptability, batch_data_list, df, df_anal):
 			df['d18O_VPDB_mineral'] = ((df['d18O_VSMOW'] - list(map(thousandlna, df['Mineralogy']))) - 30.92)/1.03092 # convert from CO2 d18O (VSMOW) to mineral d18O (VPDB)
 			df['d18O_VSMOW_mineral'] = df['d18O_VPDB_mineral'] * 1.03092 + 30.92 # convert mineral VPDB to mineral VSMOW
 			d18Ow_VSMOW = ((1/alpha)*(df['d18O_VSMOW_mineral'] + 1000)) - 1000 # convert from CO2  d18O VSMOW to water d18O VSMOW
-			df['d18O_VPDB_mineral']  = round(df['d18O_VPDB_mineral'],1)
+			df['d18O_VPDB_mineral']  = df['d18O_VPDB_mineral']
 
 		else:
 			df['d18O_VPDB_mineral'] = ((df['d18O_VSMOW'] - 1000*np.log(1.00871) - 30.92)/1.03092) # convert from CO2 d18O (VSMOW) to calcite d18O (VPDB) if mineralogy not specified
 			d18Ow_VSMOW = ((1/alpha)*(df['d18O_VSMOW_mineral'] + 1000)) - 1000 # convert from CO2  d18O VSMOW to water d18O VSMOW
-			df['d18O_VPDB_mineral']  = round(df['d18O_VPDB_mineral'],1)
+			df['d18O_VPDB_mineral']  = df['d18O_VPDB_mineral']
 
 		return d18Ow_VSMOW
 
@@ -690,8 +786,8 @@ def add_metadata(dir_path, rptability, batch_data_list, df, df_anal):
 
 	df_anal['T_MIT'] = df_anal['D47'].map(calc_MIT_temp)
 
-	df_batch = pd.DataFrame(batch_data_list, columns = ['UID', 'Transducer_Pressure', 'Sample_Weight', 'NuCarb_temp','Pumpover_Pressure',
-		'Init_Sam_beam', 'Balance', 'Vial_Location', 'd13C_SE (Nu)', 'd18O_SE (Nu)', 'D47_SE (Nu)', 'd47_pre_SE', 'd47_post_SE', 'Bad_Cycles'])
+	df_batch = pd.DataFrame(batch_data_list, columns = ['UID', 'Time_Collected', 'Transducer_Pressure', 'Sample_Weight', 'NuCarb_temp','Pumpover_Pressure',
+		'Init_Sam_beam', 'Balance', 'Vial_Location', 'd13C_SE_Nu', 'd18O_SE_Nu', 'D47_SE_Nu', 'd47_pre_SE', 'd47_post_SE', 'Bad_Cycles'])
 
 
 	df_anal = df_anal.merge(df_meta, how = 'left', on = 'Sample')
@@ -704,13 +800,17 @@ def add_metadata(dir_path, rptability, batch_data_list, df, df_anal):
 
 	df_anal['T_MIT'] = round(df_anal['T_MIT'], 1)
 
+
 	if 'Mineralogy' in df_anal.columns:
 		df_anal['d18O_VPDB_mineral'] = ((df_anal['d18O_VSMOW'] - list(map(thousandlna, df_anal['Mineralogy']))) - 30.92)/1.03092 # convert from CO2 d18O (VSMOW) to mineral d18O (VPDB)
-		df_anal['d18Ow_VSMOW'] = round(((1/a_A21_H14)*(df_anal['d18O_VSMOW'] + 1000)) - 1000,1) # convert from CO2  d18O VSMOW to water d18O VSMOW,1) # convert from CO2  d18O VSMOW to water d18O VSMOW
-		df_anal['d18Ow_VSMOW_KON97'] = round(((1/a_KON97)*(df_anal['d18O_VSMOW'] + 1000)) - 1000,1) # convert from CO2  d18O VSMOW to water d18O VSMOW
-		df_anal['d18Ow_VSMOW_A21'] = round(((1/a_A21)*(df_anal['d18O_VSMOW'] + 1000)) - 1000,1) # convert from CO2  d18O VSMOW to water d18O VSMOW
-		df_anal['d18Ow_VSMOW_H14'] = round(((1/a_H14)*(df_anal['d18O_VSMOW'] + 1000)) - 1000,1) # convert from CO2  d18O VSMOW to water d18O VSMOW
-		
+		df_anal['d18O_VSMOW_mineral'] = df_anal['d18O_VPDB_mineral'] * 1.03092 + 30.92 # convert mineral VPDB to mineral VSMOW
+		df_anal['d18Ow_VSMOW'] = round(((1/a_A21_H14)*(df_anal['d18O_VSMOW_mineral'] + 1000)) - 1000,1) # convert from CO2  d18O VSMOW to water d18O VSMOW,1) # convert from CO2  d18O VSMOW to water d18O VSMOW
+		df_anal['d18Ow_VSMOW_KON97'] = round(((1/a_KON97)*(df_anal['d18O_VSMOW_mineral'] + 1000)) - 1000,1) # convert from CO2  d18O VSMOW to water d18O VSMOW
+		df_anal['d18Ow_VSMOW_A21'] = round(((1/a_A21)*(df_anal['d18O_VSMOW_mineral'] + 1000)) - 1000,1) # convert from CO2  d18O VSMOW to water d18O VSMOW
+		df_anal['d18Ow_VSMOW_H14'] = round(((1/a_H14)*(df_anal['d18O_VSMOW_mineral'] + 1000)) - 1000,1) # convert from CO2  d18O VSMOW to water d18O VSMOW
+	
+	else:
+		print('Mineralogy not given for all samples. Assumed mineralogy is calcite where unspecified.')
 
 	n_bad_cycles = df_anal['Bad_Cycles'].sum()
 	print('Total # bad cycles removed = ', n_bad_cycles, '(', round((n_bad_cycles/(len(df_anal)*60))*100, 2), '%)') # does not include bad cycles from disabled reps
@@ -720,15 +820,9 @@ def add_metadata(dir_path, rptability, batch_data_list, df, df_anal):
 	# eth_loc = np.where(df_anal['Sample'] == 'ETH-4')	
 	# mbar_mg_eth = (df_anal['Transducer_Pressure'].iloc[eth_loc] / df_anal['Sample_Weight'].iloc[eth_loc]).mean()
 	
-	dol_carb_scaler = 1 + (((100.087*2) - (84.314 + 100.087))/(100.087*2)) # mw 2x caco3 minus (mw mgco3 + mw caco3)
 
-	def calc_pct_evolv_carb(mineral, transduc_press, samp_weight, mbar_mg_eth):
 
-		pct_evolved_carb = ((transduc_press/samp_weight)/mbar_mg_eth)*100
-		if mineral == 'Dolomite':
-			return round(pct_evolved_carb/dol_carb_scaler,1)
-		else:
-			return round(pct_evolved_carb,1)
+
 
 	df_anal['pct_evolved_carbonate'] = np.zeros(len(df_anal))
 
@@ -767,10 +861,9 @@ def add_metadata(dir_path, rptability, batch_data_list, df, df_anal):
 	
 	meta_cols = df_meta.drop(columns = ['Sample']).columns
 
-
 	col_order_list = ['Sample', 'N', 'mean_pct_carb', 'd13C_VPDB', 'd18O_VPDB_mineral', 'd18Ow_VSMOW', 
 		'd18Ow_VSMOW_lower', 'd18Ow_VSMOW_upper', 'D47', 'SE', 'SD', 'CL_95_pct', 'T_MIT', 
-		'T_MIT_95CL_lower', 'T_MIT_95CL_upper']
+		'T_MIT_95CL_lower', 'T_MIT_95CL_upper', 'D48']
 
 	col_order_list.extend(list(meta_cols))
 
@@ -782,27 +875,79 @@ def add_metadata(dir_path, rptability, batch_data_list, df, df_anal):
 
 	df = df[col_order_list]
 
+	# save output
+
 	df.to_csv(Path.cwd() / 'results' / f'summary_{proj}.csv', index = False)
+
+	df_anal = df_anal.sort_values(by=['UID'])
 
 	df_anal.to_csv(Path.cwd() / 'results' / f'analyses_{proj}.csv', index = False)
 	to_earthchem(df_anal)
 
 	os.chdir(dir_path)
 
-def add_metadata_std():
+def add_metadata_std(batch_data_list):
 
 	file_meta = Path.cwd() / 'params.xlsx'
 	df_anal = pd.read_csv(Path.cwd() / 'results' / f'analyses_bulk_{proj}.csv')
 
-	if os.path.exists(file_meta):
-		df_meta = pd.read_excel(file_meta, 'Metadata')
-		df_anal= df_anal.merge(df_meta, how = 'left')	
+	df_batch = pd.DataFrame(batch_data_list, columns = ['UID', 'Time_Collected', 'Transducer_Pressure', 'Sample_Weight', 'NuCarb_temp','Pumpover_Pressure',
+	'Init_Sam_beam', 'Balance', 'Vial_Location', 'd13C_SE_Nu', 'd18O_SE_Nu', 'D47_SE_Nu', 'd47_pre_SE', 'd47_post_SE', 'Bad_Cycles'])
+	df_meta = pd.read_excel(file_meta, 'Metadata')
+	df_anal = df_anal.merge(df_meta, how = 'left')
+	df_anal = df_anal.merge(df_batch, how = 'left', on = 'UID')	
 
 	if 'Mineralogy' in df_anal.columns:
-		df_anal['d18O_VPDB_mineral'] = round(((df_anal['d18O_VSMOW'] - list(map(thousandlna, df_anal['Mineralogy']))) - 30.92)/1.03092, 1) # convert from CO2 d18O (VSMOW) to mineral d18O (VPDB)
+		df_anal['d18O_VPDB_mineral'] = ((df_anal['d18O_VSMOW'] - list(map(thousandlna, df_anal['Mineralogy']))) - 30.92)/1.03092 # convert from CO2 d18O (VSMOW) to mineral d18O (VPDB)
 
 	else:
-		df_anal['d18O_VPDB_mineral'] = round(((df_anal['d18O_VSMOW'] - 1000*np.log(1.00871) - 30.92)/1.03092), 1) # convert from CO2 d18O (VSMOW) to calcite d18O (VPDB) if mineralogy not specified
+		df_anal['d18O_VPDB_mineral'] = ((df_anal['d18O_VSMOW'] - 1000*np.log(1.00871) - 30.92)/1.03092) # convert from CO2 d18O (VSMOW) to calcite d18O (VPDB) if mineralogy not specified
+
+
+		# get carbonate percent; NB USES INIT_SAM_BEAM INSTEAD OF TP
+	df_anal['pct_evolved_carbonate'] = np.zeros(len(df_anal))
+	sess_eth_tp_dict = {}
+	for i in range(len(df_anal['Session'].unique())):
+		this_sess = df_anal[df_anal['Session'] == df_anal['Session'].unique()[i]]
+		# find a standard that is in a given session
+		if this_sess['Sample'].isin(['ETH-2']).any():
+			eth_loc = np.where(this_sess['Sample'] == 'ETH-2')
+		elif this_sess['Sample'].isin(['ETH-3']).any():
+			eth_loc = np.where(this_sess['Sample'] == 'ETH-3')
+		elif this_sess['Sample'].isin(['ETH-1']).any():
+			eth_loc = np.where(this_sess['Sample'] == 'ETH-1')
+		elif this_sess['Sample'].isin(['CIT']).any():
+			eth_loc = np.where(this_sess['Sample'] == 'CIT')
+		else: 
+			eth_loc = np.where(this_sess['Sample'] == 'ETH-2')
+			print('no stds found')
+
+		mbar_mg_eth = (this_sess['Init_Sam_beam'].iloc[eth_loc] / this_sess['Sample_Weight'].iloc[eth_loc]).mean()
+		sess_eth_tp_dict[df_anal['Session'].unique()[i]] = mbar_mg_eth # assigns each session a baseline TP value based on ETH
+
+	# using dictionary above, calculate pec 
+	for j in range(len(df_anal)):
+		df_anal['pct_evolved_carbonate'].iloc[j] = calc_pct_evolv_carb(df_anal['Mineralogy'].iloc[j], df_anal['Init_Sam_beam'].iloc[j], df_anal['Sample_Weight'].iloc[j], sess_eth_tp_dict[df_anal['Session'].iloc[j]])
+
+	df_anal['d18O_VPDB_mineral'] = round(df_anal['d18O_VPDB_mineral'], 2)
+	df_anal['d13C_VPDB'] = round(df_anal['d13C_VPDB'], 2)
+	df_anal['pct_evolved_carbonate'] = round(df_anal['pct_evolved_carbonate'], 1)
+
+	meta_cols = df_meta.drop(columns = ['Sample']).columns
+	batch_cols = df_batch.drop(columns = ['UID', 'd13C_SE_Nu', 'd18O_SE_Nu', 'D47_SE_Nu', 'd47_pre_SE', 'd47_post_SE', 'Bad_Cycles']).columns
+
+	col_order_list = ['Sample', 'UID', 'Session', 'pct_evolved_carbonate', 'd13C_VPDB', 'd13C_SE_Nu', 'd18O_VPDB_mineral', 'd18O_SE_Nu', 'd45', 'd46', 'd47', 'd48', 'd49']
+
+	col_order_list.extend(list(meta_cols))
+	col_order_list.extend(list(batch_cols))
+
+	#col_order_list.extend(['d47_VPDB'])
+
+	df_anal = df_anal[col_order_list]
+
+	df_anal = df_anal.sort_values(by=['UID'])
+
+
 
 	df_anal.to_csv(Path.cwd() / 'results' / f'analyses_bulk_{proj}.csv', index = False)
 	
@@ -811,6 +956,7 @@ def to_earthchem(df_a):
 	''' Formats analyses in format used for the EarthChem database'''
 
 	df_ec = pd.DataFrame()
+	
 
 	df_ec['SampName'] = df_a['Sample']
 
@@ -818,69 +964,114 @@ def to_earthchem(df_a):
 	df_ec['SampSubCategory'] = 'null'
 	df_ec['SampNum'] = 'NA'
 	df_ec['Mineralogy'] = df_a['Mineralogy']
-	df_ec['Date'] = df_a['Session']
-	df_ec['AnalysisID'] = df_a['UID']
-	df_ec['RefYN'] = 'NA'
-	df_ec['D47TE_SG_WD'] = 'NA'
-	df_ec['MassSpec'] = 'Nu Perspective'
-	# df_ec['FormT'] = df_a['Form_T']
-	# df_ec['erFormT'] = df_a['err_Form_T']
-	df_ec['rxnTemp'] = 70
-	df_ec['Bad'] = 0
+	df_ec['Mineralogy2'] = 'NA'
 
+	df_ec['Date'] = 'null' # ***
+	df_ec['Time'] = 'null' # ***
+	df_ec['AnalysisID'] = df_a['UID']
+	df_ec['RepliicateID'] = 'NA'
+	df_ec['MassSpec'] = 'Nu_Perspective'
+	#df_ec['FormT'] = df_a['Form_T']
+	#df_ec['erFormT'] = df_a['err_Form_T']
+	df_ec['rxnTemp'] = 70
+	df_ec['SampYN'] = 'NA'
+	df_ec['RefYN'] = 'NA'
+	df_ec['Bad'] = 0
+	df_ec['D47TE'] = 'NA'
+	df_ec['AFF'] = 0
+	df_ec['ARF_ID1'] = df_a['Session']
+	df_ec['ARF_ID2'] = 'NA'
+	df_ec['ARF_ID3'] = 'NA'
+
+	df_ec['d45'] = df_a['d45']
+	df_ec['sd_d45'] = 'NA'
+	df_ec['d46'] = df_a['d46']
+	df_ec['sd_d46'] = 'NA'
+	df_ec['d47'] = df_a['d47']
+	df_ec['sd_d47'] = 'NA'
+	df_ec['d48'] = df_a['d48']
+	df_ec['sd_d48'] = 'NA'
+	df_ec['d49'] = df_a['d49']
+	df_ec['sd_d49'] = 'NA'
+
+	df_ec['d13C_wg_VPDB'] = df_a['d13Cwg_VPDB']
+	df_ec['d18O_wg_VSMOW'] = df_a['d18Owg_VSMOW']
+
+	df_ec['d13C'] = df_a['d13C_VPDB']
+	df_ec['se_13'] = df_a['d13C_SE_Nu']
+	df_ec['d18O'] = df_a['d18O_VSMOW']
+	df_ec['se_18'] = df_a['d18O_SE_Nu']
+
+	df_ec['AFF_d18O'] = 1.0087142
+
+	df_ec['Final_d13Ccarb'] = df_a['d13C_VPDB']
+	df_ec['Final_d18Ocarb_VSMOW'] = df_a['d18O_VPDB_mineral'] * 1.03092 + 30.92
+
+	df_ec['D47'] = df_a['D47raw']
+	df_ec['sd_D47'] = 'NA'
+	df_ec['se_D47'] = df_a['d47_post_SE']
+
+	df_ec['D48'] = df_a['D48raw']
+	df_ec['sd_D48'] = 'NA'
+	df_ec['se_D48'] = 'NA'
+
+	df_ec['D49'] = df_a['D49raw']
+	df_ec['sd_D49'] = 'NA'
+	df_ec['se_D49'] = 'NA'
+
+	df_ec['SlopeEGL'] = 'NA'
+	df_ec['SlopeETF'] = 'NA'
+	df_ec['IntETF'] = 'NA'
+
+	df_ec['D47rfac'] = df_a['D47']
+
+	# replace some things by sample
 	for i in range(len(df_a['Sample'])):
 		this = df_a['Sample'].loc[i] 
 		
 		if this == 'ETH-1' or this == 'ETH-2' or this == 'ETH-3' or this == 'ETH-4' or this == 'MERCK' or this == 'IAEA-C1' or this == 'IAEA-C2':
 
-			df_ec['SampCategory'] = df_ec['SampCategory'].replace('null', 'carbSTD')
-			df_ec['SampSubCategory'] = df_ec['SampSubCategory'].replace('null', this)
+			df_ec['SampCategory'].iloc[i] = 'carbSTD'
+			df_ec['SampSubCategory'].iloc[i] = this
 
 			if this != 'IAEA-C1':
-				df_ec['RefYN'] = df_ec['RefYN'].replace('NA', 'Y')
+				df_ec['RefYN'].iloc[i] = 'Y'
 			else:
 				df_ec['RefYN'] = df_ec['RefYN'].replace('NA', 'N')
 			if this == 'ETH-1':
-				df_ec['D47TE_SG_WD'] = df_ec['D47TE_SG_WD'].replace('NA', 0.2052)
+				df_ec['D47TE'] = df_ec['D47TE'].replace('NA', 0.2052)
 			if this == 'ETH-2':
-				df_ec['D47TE_SG_WD'] = df_ec['D47TE_SG_WD'].replace('NA', 0.2085)
+				df_ec['D47TE'] = df_ec['D47TE'].replace('NA', 0.2085)
 			if this == 'ETH-3':
-				df_ec['D47TE_SG_WD'] = df_ec['D47TE_SG_WD'].replace('NA', 0.6132)
+				df_ec['D47TE'] = df_ec['D47TE'].replace('NA', 0.6132)
 			if this == 'ETH-4':
-				df_ec['D47TE_SG_WD'] = df_ec['D47TE_SG_WD'].replace('NA', 0.4505)
+				df_ec['D47TE'] = df_ec['D47TE'].replace('NA', 0.4505)
 			if this == 'IAEA-C2':
-				df_ec['D47TE_SG_WD'] = df_ec['D47TE_SG_WD'].replace('NA', 0.6409)
+				df_ec['D47TE'] = df_ec['D47TE'].replace('NA', 0.6409)
 			if this == 'MERCK':
-				df_ec['D47TE_SG_WD'] = df_ec['D47TE_SG_WD'].replace('NA', 0.5135)
+				df_ec['D47TE'] = df_ec['D47TE'].replace('NA', 0.5135)
 
 		else:
 			
-			df_ec['SampCategory'] = df_ec['SampCategory'].replace('null','sample')
-			# NB need subcategory for non-standards
-			#df_ec['SampSubCategory'][i] = df_a['Method'][i]
+			df_ec['SampCategory'].iloc[i] = 'Sample'
+			df_ec['SampSubCategory'].iloc[i] = 'NA'#df_a['Type'].iloc[i]
+			df_ec['SampYN'].iloc[i] = 'Y'
+			if df_ec['SampSubCategory'].iloc[i] == 'Synthetic_or_standard':
+				df_ec['SampSubCategory'].iloc[i] = 'Synthetic'
+
+
 			df_ec['RefYN'] = df_ec['RefYN'].replace('NA', 'N')
-			#df_ec['D47TE_SG_WD'].loc[i] = 'NA'
 
-	df_ec['AFF_WD'] = 'NA'
-	df_ec['ARF_ID1'] = df_a['Session']
-	df_ec['d45'] = df_a['d45']
-	df_ec['d46'] = df_a['d46']
-	df_ec['d47'] = df_a['d47']
-	df_ec['d48'] = df_a['d48']
-	df_ec['d49'] = df_a['d49']
-	df_ec['d13C_wg_VPDB'] = df_a['d13Cwg_VPDB']
-	df_ec['d18O_wg_VSMOW'] = df_a['d18Owg_VSMOW']
-	df_ec['BRd13C'] = df_a['d13C_VPDB']
-	df_ec['BRd18O'] = df_a['d18O_VSMOW']
-	df_ec['BRD47'] = df_a['D47raw']
-	df_ec['BRD48'] = df_a['D48raw']
-	df_ec['BRD49'] = df_a['D49raw']
-	df_ec['BRSlopeEGL'] = 'NA'
-	df_ec['BRSlopeETF_WD'] = 'NA'
-	df_ec['BRIntETF_WD'] = 'NA'
-	df_ec['BRD47rfac_P_newAFF'] = df_a['D47']
-	df_ec['d18Oac'] = 'NA' #df_a['d18O_mineral_VPDB']
+		if df_ec['Mineralogy'].iloc[i] == 'Dolomite':
+			df_ec['AFF_d18O'].iloc[i] == 1.009926
 
+		df_ec['Date'].iloc[i] = str(df_a['Time_Collected'].iloc[i])[3:].strip()[:10]
+		df_ec['Time'].iloc[i] = str(df_a['Time_Collected'].iloc[i])[3:].strip()[11:]
+			
+
+
+
+	df_ec = df_ec.sort_values(by=['AnalysisID'])
 	df_ec.to_csv(Path.cwd() / 'results' / f'analyses_earthchem_fmt_{proj}.csv', index = False)
 
 # ---- MAKE PLOTS ----
@@ -1001,6 +1192,7 @@ def plot_ETH_D47(repeatability_all, df):
 	plt.grid(visible=True, which='major', color='gray', linestyle='--', zorder = 0, alpha = 0.4)	
 	#plt.tight_layout()
 	plt.savefig(Path.cwd().parents[0] / 'plots' / 'd13C.png')
+	plt.close()
 
 	d18O_median = df.groupby('Sample')['d18O_VSMOW'].median()
 
@@ -1132,21 +1324,6 @@ def d47_D47_plot(df):
 
 def interactive_plots(df):
 
-	try:
-		from bokeh.io import output_file
-		from bokeh.io import save
-		from bokeh.plotting import figure, show, ColumnDataSource
-		from bokeh.models.tools import HoverTool
-		from bokeh.layouts import row
-		import bokeh.models as bmo
-		from bokeh.palettes import d3
-		from bokeh.transform import jitter
-		
-	except ModuleNotFoundError:
-		print('Bokeh package not found. Install Bokeh for interactive plots.')
-		return
-
-
 	output_file(filename=Path.cwd().parents[0] / 'plots' / f'D47_d47_interactive_{proj}.html', title="D47_d47_interactive")
 
 	df_anchor = df.loc[(df['Sample'] == 'ETH-1') | (df['Sample'] == 'ETH-2') | 
@@ -1254,6 +1431,91 @@ def joy_plot():
 	plt.style.use('default')  
 
 	plt.close()
+
+def D48_plot(df):
+
+	output_file(filename=Path.cwd().parents[0] / 'plots' / f'D48_D47_interactive_{proj}.html', title="D48_D47_interactive")
+
+	df_anchor = df.loc[(df['Sample'] == 'ETH-1') | (df['Sample'] == 'ETH-2') | 
+				(df['Sample'] == 'ETH-3') | (df['Sample'] == 'ETH-4') | (df['Sample'] == 'IAEA-C2') 
+				| (df['Sample'] == 'MERCK')]
+
+	data_anchors = ColumnDataSource.from_df(df_anchor)
+	data_analyses = ColumnDataSource.from_df(df)
+
+	TOOLTIPS = [("Sample name", "@Sample"),
+				("N", "@N"),
+				("d13C", "@d13C_VPDB")]
+	std_tools = ['pan,wheel_zoom,box_zoom,reset,hover']
+
+	palette = d3['Category10'][len(df_anchor['Sample'].unique())]
+	color_map = bmo.CategoricalColorMapper(factors=df_anchor['Sample'].unique(),
+                                   palette=palette)
+
+	f1 = figure(x_axis_label = 'D48',
+				y_axis_label = 'D47',
+				tools = std_tools,
+				tooltips = TOOLTIPS)
+
+	f1.scatter('D48', 'D47', source = data_analyses, color = 'black', size = 7)
+	f1.scatter('D48', 'D47', source = data_anchors, color = {'field':'Sample', 'transform':color_map}, size = 7)
+
+	D48_x = np.linspace(0.21, 0.28, 100)
+	D47_eq = -0.4771 + (9.102 * D48_x) - (31.709 * (D48_x**2)) + (65.561 * (D48_x**3)) - (54.560 * (D48_x**4)) # from Bajnai et al. (2020) Eq. 3
+
+	T_x = np.linspace(273, 1273, 100)
+
+	D47_F21 = 1.038 * ((-5.897/T_x) - (3.521 * (1e3/(T_x**2))) + (2.391 * (1e7/(T_x**3))) - (3.541 * (1e9/(T_x**4)))) + 0.1856
+	D48_F21 =  1.028 * ((6.002/T_x) - (1.299 * (1e4/(T_x**2))) + (8.996 * (1e6/(T_x**3))) - (7.423 * (1e8/(T_x**4)))) + 0.1245# from Fiebeg et al (2021) abstract
+
+
+	f1.line(D48_x, D47_eq, color = 'black', line_dash = 'dashed',  legend_label = 'Equilibrium (Bajnai et al., 2020 Eq. 3)')
+	f1.line(D48_F21, D47_F21, color = 'black', legend_label = 'Equilibrium (Fiebig et al., 2021)')
+	f1.legend.location = 'top_left'
+	save(f1)
+
+def std_plots(df):
+	from matplotlib.lines import Line2D
+
+	
+
+	df_anchor = df.loc[(df['Sample'] == 'ETH-1') | (df['Sample'] == 'ETH-2') | 
+	(df['Sample'] == 'ETH-3') | (df['Sample'] == 'ETH-4') | (df['Sample'] == 'IAEA-C2')]
+	#| (df['Sample'] == 'MERCK')]# | (df['Sample'] == 'IAEA-C1')]
+
+	df_anchor = df_anchor.reset_index(drop = True)
+
+	#  ----- PLOT D47 ANCHORS -----
+	fig, ax = plt.subplots()
+	ax.scatter(df_anchor['d18O_VPDB_mineral'], df_anchor['Sample'], color = 'gray', alpha = 0.8, edgecolor = 'black')
+	ax.axhline(0.5, linestyle = '--', color = 'gray', alpha = 0.5)
+	ax.axhline(1.5, linestyle = '--', color = 'gray', alpha = 0.5)
+	ax.axhline(2.5, linestyle = '--', color = 'gray', alpha = 0.5)
+	ax.axhline(3.5, linestyle = '--', color = 'gray', alpha = 0.5)
+	ax.axhline(4.5, linestyle = '--', color = 'gray', alpha = 0.5)
+	ax.axhline(5.5, linestyle = '--', color = 'gray', alpha = 0.5)
+
+	plt.xlabel('d18O_VPDB_mineral')
+	#plt.legend()
+	#plt.tight_layout()
+	plt.savefig(Path.cwd().parents[0] / proj / 'plots' / 'd18O_std.png', dpi = 300)
+	plt.close()
+
+	fig, ax = plt.subplots()
+	ax.scatter(df_anchor['d13C_VPDB'], df_anchor['Sample'], color = 'gray', alpha = 0.8, edgecolor = 'black')
+	ax.axhline(0.5, linestyle = '--', color = 'gray', alpha = 0.5)
+	ax.axhline(1.5, linestyle = '--', color = 'gray', alpha = 0.5)
+	ax.axhline(2.5, linestyle = '--', color = 'gray', alpha = 0.5)
+	ax.axhline(3.5, linestyle = '--', color = 'gray', alpha = 0.5)
+	ax.axhline(4.5, linestyle = '--', color = 'gray', alpha = 0.5)
+	ax.axhline(5.5, linestyle = '--', color = 'gray', alpha = 0.5)
+
+	plt.xlabel('d13C_VPDB')
+	#plt.legend()
+	#plt.tight_layout()
+	plt.savefig(Path.cwd().parents[0] / proj / 'plots' / 'd13C_std.png', dpi = 300)
+	plt.close()
+
 
 
 	
