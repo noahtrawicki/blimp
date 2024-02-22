@@ -1,4 +1,4 @@
-# --- VERSION 0.1.8 updated 20240113 by NTA ---
+# --- VERSION 0.2.0 updated 20240222 by NTA ---
 
 import pandas as pd
 import numpy as np
