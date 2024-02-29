@@ -1,4 +1,4 @@
-# --- VERSION 0.2.0 updated 20240222 by NTA ---
+# --- VERSION 0.2.1 updated 20240229 by NTA ---
 
 import pandas as pd
 import numpy as np
@@ -503,6 +503,8 @@ def run_D47crunch(run_type, raw_deltas_file):
 	Nominal_D47 = df_anc.to_dict()['D47'] # Sets anchor values for D47crunch as dictionary {Anchor: value}
 	
 	data = D47crunch.D47data()
+	data.d13C_STANDARDIZATION_METHOD = '1pt'
+	data.d18O_STANDARDIZATION_METHOD = '1pt'
 	data.Nominal_D47 = Nominal_D47
 	print('Anchors are ', data.Nominal_D47)	# list anchors used and their nominal D47
 	data.ALPHA_18O_ACID_REACTION = calc_a18O # This is selected from the params file -- you can use whatever value you want in there.
@@ -545,10 +547,8 @@ def run_D47crunch(run_type, raw_deltas_file):
 		data_48.wg()
 		data_48.crunch()
 
-		print(data_48.Nominal_D48)
 
 		data.standardize()
-		print(pd.DataFrame(data_48).info(verbose = True))
 		data_48.standardize()
 
 		repeatability_all = data.repeatability['r_D47']
@@ -566,6 +566,7 @@ def run_D47crunch(run_type, raw_deltas_file):
 		sam_48 = data_48.table_of_samples(verbose = True, print_out = False, dir = results_path, filename = f'D48_sample_{proj}.csv', save_to_file = False, output = 'raw')
 
 		analy = data.table_of_analyses(print_out = False, save_to_file = False, output = 'raw')
+		analy_48 = data_48.table_of_analyses(print_out = False, save_to_file = False, output = 'raw')
 		#data.plot_sessions(dir = Path.cwd() / 'plots' / 'session_plots') # Issue on everyones computer but Noah's...
 
 		# send sample and analyses to pandas dataframe, clean up
@@ -575,6 +576,10 @@ def run_D47crunch(run_type, raw_deltas_file):
 		df_sam_48 = pd.DataFrame(sam_48[1:], columns = sam_48[0]) #import as dataframe, replace empty strings with NaN
 		df_sam_48 = df_sam_48.drop(labels = ['N', 'd13C_VPDB', 'd18O_VSMOW', 'SE', '95% CL', 'SD', 'p_Levene'], axis = 1)
 
+		df_analy_48 = pd.DataFrame(analy_48[1:], columns = analy_48[0]) #import as dataframe, replace empty strings with NaN
+		df_analy_48 = df_analy_48.drop(labels = ['Session', 'Sample', 'd13Cwg_VPDB', 'd18Owg_VSMOW', 'd45', 'd46',
+       'd47', 'd48', 'd49', 'd13C_VPDB', 'd18O_VSMOW', 'D47raw', 'D48raw', 'D49raw',], axis = 1)
+
 		# merge 47 df with D48 column from df 48 (on Sample)
 		df_sam = pd.merge(df_sam, df_sam_48, on = 'Sample')
 		df_sam = df_sam.astype({'Sample':'str', 'N':'int32', 'd13C_VPDB':'float64', 'd18O_VSMOW':'float64', 'D47':'float64','SE':'float64', 
@@ -582,10 +587,11 @@ def run_D47crunch(run_type, raw_deltas_file):
 		df_sam = df_sam.rename(columns = {'95% CL': 'CL_95_pct'})
 
 		df_analy = pd.DataFrame(analy[1:], columns = analy[0]).replace(r'^\s*$', np.nan, regex=True)  #import as dataframe, replace empty strings with NaN
+		df_analy = pd.merge(df_analy, df_analy_48, on = 'UID')
 		df_analy = df_analy.astype({'UID':'int32', 'Session':'int32', 'Sample':'str', 'd13Cwg_VPDB':'float64', 
 			'd18Owg_VSMOW':'float64', 'd45':'float64', 'd46':'float64', 'd47':'float64', 'd48':'float64', 
 			'd49':'float64', 'd13C_VPDB':'float64', 'd18O_VSMOW':'float64', 'D47raw':'float64', 'D48raw':'float64',
-       		'D49raw':'float64', 'D47':'float64'}) #recast types appropriately (all str by default)
+       		'D49raw':'float64', 'D47':'float64', 'D48':'float64'}) #recast types appropriately (all str by default)
 
 		df_rmv = pd.read_excel('params.xlsx', 'Remove')
 		manual_rmv = list(df_rmv.UID)
@@ -946,8 +952,6 @@ def add_metadata_std(batch_data_list):
 	df_anal = df_anal[col_order_list]
 
 	df_anal = df_anal.sort_values(by=['UID'])
-
-
 
 	df_anal.to_csv(Path.cwd() / 'results' / f'analyses_bulk_{proj}.csv', index = False)
 	
@@ -1445,6 +1449,49 @@ def D48_plot(df):
 
 	TOOLTIPS = [("Sample name", "@Sample"),
 				("N", "@N"),
+				("d13C", "@d13C_VPDB")]
+	std_tools = ['pan,wheel_zoom,box_zoom,reset,hover']
+
+	palette = d3['Category10'][len(df_anchor['Sample'].unique())]
+	color_map = bmo.CategoricalColorMapper(factors=df_anchor['Sample'].unique(),
+                                   palette=palette)
+
+	f1 = figure(x_axis_label = 'D48',
+				y_axis_label = 'D47',
+				tools = std_tools,
+				tooltips = TOOLTIPS)
+
+	f1.scatter('D48', 'D47', source = data_analyses, color = 'black', size = 7)
+	f1.scatter('D48', 'D47', source = data_anchors, color = {'field':'Sample', 'transform':color_map}, size = 7)
+
+	D48_x = np.linspace(0.21, 0.28, 100)
+	D47_eq = -0.4771 + (9.102 * D48_x) - (31.709 * (D48_x**2)) + (65.561 * (D48_x**3)) - (54.560 * (D48_x**4)) # from Bajnai et al. (2020) Eq. 3
+
+	T_x = np.linspace(273, 1273, 100)
+
+	D47_F21 = 1.038 * ((-5.897/T_x) - (3.521 * (1e3/(T_x**2))) + (2.391 * (1e7/(T_x**3))) - (3.541 * (1e9/(T_x**4)))) + 0.1856
+	D48_F21 =  1.028 * ((6.002/T_x) - (1.299 * (1e4/(T_x**2))) + (8.996 * (1e6/(T_x**3))) - (7.423 * (1e8/(T_x**4)))) + 0.1245# from Fiebeg et al (2021) abstract
+
+
+	f1.line(D48_x, D47_eq, color = 'black', line_dash = 'dashed',  legend_label = 'Equilibrium (Bajnai et al., 2020 Eq. 3)')
+	f1.line(D48_F21, D47_F21, color = 'black', legend_label = 'Equilibrium (Fiebig et al., 2021)')
+	f1.legend.location = 'top_left'
+	save(f1)
+
+def D48_plot_analy(df):
+
+	output_file(filename=Path.cwd().parents[0] / 'plots' / f'D48_D47_interactive_reps_{proj}.html', title="D48_D47_interactive")
+
+	df = df[df['Session'] > 20230815]
+
+	df_anchor = df.loc[(df['Sample'] == 'ETH-1') | (df['Sample'] == 'ETH-2') | 
+				(df['Sample'] == 'ETH-3') | (df['Sample'] == 'ETH-4') | (df['Sample'] == 'IAEA-C2') 
+				| (df['Sample'] == 'MERCK')]
+
+	data_anchors = ColumnDataSource.from_df(df_anchor)
+	data_analyses = ColumnDataSource.from_df(df)
+
+	TOOLTIPS = [("Sample name", "@Sample"),
 				("d13C", "@d13C_VPDB")]
 	std_tools = ['pan,wheel_zoom,box_zoom,reset,hover']
 

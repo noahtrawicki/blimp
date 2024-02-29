@@ -1,4 +1,4 @@
-# --- VERSION 0.2.0 updated 20240222 by NTA ---
+# --- VERSION 0.2.1 updated 20240229 by NTA ---
 
 
 import os
@@ -112,6 +112,7 @@ if run_type == 'clumped':
 	b_s.interactive_plots(df)
 	b_s.joy_plot()
 	b_s.D48_plot(df_sam)
+	b_s.D48_plot_analy(df_analy)
 
 elif run_type == 'standard':
 	b_s.add_metadata_std(batch_data_list)
