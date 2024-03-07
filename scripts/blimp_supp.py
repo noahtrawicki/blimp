@@ -1,4 +1,4 @@
-# --- VERSION 0.2.1 updated 20240229 by NTA ---
+# --- VERSION 0.2.2 updated 20240307 by NTA ---
 
 import pandas as pd
 import numpy as np
@@ -412,6 +412,12 @@ def read_Nu_data(data_file, file_number, current_sample, folder_name, run_type):
 				d13C_SE = float(df_results_summ['Std_Err.5'][curr_row])
 				d18O_SE = float(df_results_summ['Std_Err.6'][curr_row])
 				D47_SE = float(df_results_summ['Std_Err.7'][curr_row])
+
+				if nu_file_version == 14: # at data file 14, batch summary output changed (added SE to d45, etc.)
+
+					d13C_SE = float(df_results_summ['Std_Err.15'][curr_row])
+					d18O_SE = float(df_results_summ['Std_Err.16'][curr_row])
+					D47_SE = float(df_results_summ['Std_Err.17'][curr_row])
 
 				batch_data_list = [file_number, time, transduc_press, samp_weight, NuCarb_temp, pumpover, init_beam, balance, vial_loc, d13C_SE, d18O_SE, D47_SE, d47_pre_SE, d47_post_SE, bad_count]
 
