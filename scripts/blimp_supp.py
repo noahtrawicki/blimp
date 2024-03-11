@@ -1,4 +1,4 @@
-# --- VERSION 0.2.2 updated 20240307 by NTA ---
+# --- VERSION 0.2.3 updated 20240311 by NTA ---
 
 import pandas as pd
 import numpy as np
@@ -399,7 +399,7 @@ def read_Nu_data(data_file, file_number, current_sample, folder_name, run_type):
 				# for i in df_results_summ.columns: print(i)
 				# print(df_results_summ.columns)
 				transduc_press = float(df_results_summ['Transducer_Pressure'][curr_row])
-				time = df_results_summ['Time_Collected'][curr_row]
+				time = str(df_results_summ['Time_Collected'][curr_row])[2:].strip()[:19]
 				samp_weight = float(df_results_summ['Sample_Weight'][curr_row])
 				NuCarb_temp = float(df_results_summ['Ave_Temperature'][curr_row])
 				try:
