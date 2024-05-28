@@ -1,4 +1,4 @@
-# --- VERSION 0.2.3 updated 20240311 by NTA ---
+# --- VERSION 0.2.4 updated 20240528 by NTA ---
 
 import pandas as pd
 import numpy as np
@@ -198,7 +198,7 @@ def read_Nu_data(data_file, file_number, current_sample, folder_name, run_type):
 	session = str(folder_name[:8]) # creates name of session; first 8 characters of folder name are date of run start per our naming convention (e.g., 20211008 clumped apatite NTA = 20211008) 
 	bad_count = 0 # Keeps track of bad cycles (cycles > 5 SD from sample mean)
 	bad_rep_count = 0 # Keeps track of bad replicates
-
+	#print(data_file)
 	# Just read in the first row of a data file to get the data version #
 	df = pd.read_csv(data_file, nrows = 1, header = None)
 	nu_file_version = int(df.iloc[0][0][-2:])
@@ -265,6 +265,10 @@ def read_Nu_data(data_file, file_number, current_sample, folder_name, run_type):
 
 	# -- Read in blank i.e. zero measurement -- 
 	df_zero = df.head(6).astype('float64') # first 6 rows are the "Blank" i.e. zero measurement; used to zero-correct entire replicate
+
+	if file_number < 2662 and run_type == 'standard': # deals with data around July 2017 that only has data for three masses
+		df_zero = df.head(3).astype('float64') # first 6 rows are the "Blank" i.e. zero measurement; used to zero-correct entire replicate
+
 	df_zero_mean = (df_zero.apply(np.mean, axis = 1)).round(21) # calculates mean of zero for each mass
 	df_mean = df.mean(axis = 1)	# calculates the mean of each row (i.e., averages each individual measurement to calculate a cycle mean) 
 
@@ -277,18 +281,33 @@ def read_Nu_data(data_file, file_number, current_sample, folder_name, run_type):
 	mass_45_index = np.arange(10, len(df), 6)
 	mass_44_index = np.arange(11, len(df), 6)
 
-	# -- Calculate R values --
+	if file_number < 2662 and run_type == 'standard': # deals with data around July 2017 that only has data for three masses
 
-	# subtract mass_44 zero measurement from each mass_44 meas
-	m44 = (df_mean[mass_44_index] - df_zero_mean[5]).dropna().reset_index(drop = True)
+		mass_46_index = np.arange(3, len(df), 3)
+		mass_45_index = np.arange(4, len(df), 3)
+		mass_44_index = np.arange(5, len(df), 3)
+
+
+
+	# -- Calculate R values --
 
 	# For all masses, subtract zero measurement from actual measurement, and then calc raw 4X/49 ratio.
 	def calc_4X44_ratio(mass_index, zero_index):
 		m4x = (df_mean[mass_index] - df_zero_mean[zero_index]).dropna().reset_index(drop = True)
 		return m4x/m44
 
-	# Create a zero-corrected dataframe of R values	
-	df_zero_corr = pd.DataFrame({'m44':m44, 'm45_44':calc_4X44_ratio(mass_45_index, 4),'m46_44':calc_4X44_ratio(mass_46_index, 3), 
+	# subtract mass_44 zero measurement from each mass_44 meas
+	if file_number < 2662 and run_type == 'standard':
+		m44 = (df_mean[mass_44_index] - df_zero_mean[2]).dropna().reset_index(drop = True)
+		# Create a zero-corrected dataframe of R values	
+		df_zero_corr = pd.DataFrame({'m44':m44, 'm45_44':calc_4X44_ratio(mass_45_index, 1),'m46_44':calc_4X44_ratio(mass_46_index, 0), 
+								'm47_44': 0, 'm48_44':0,
+								'm49_44':0})
+
+	else:
+		m44 = (df_mean[mass_44_index] - df_zero_mean[5]).dropna().reset_index(drop = True)
+		# Create a zero-corrected dataframe of R values	
+		df_zero_corr = pd.DataFrame({'m44':m44, 'm45_44':calc_4X44_ratio(mass_45_index, 4),'m46_44':calc_4X44_ratio(mass_46_index, 3), 
 								'm47_44':calc_4X44_ratio(mass_47_index, 2), 'm48_44':calc_4X44_ratio(mass_48_index, 1),
 								'm49_44':calc_4X44_ratio(mass_49_index, 0)})
 
@@ -305,6 +324,9 @@ def read_Nu_data(data_file, file_number, current_sample, folder_name, run_type):
 	# if standard run, index locations of sample side cycles are different
 	if run_type == 'standard':
 		sam_idx = np.linspace(1, 11, 6, dtype = int)
+		if file_number < 2662: # deals with data around July 2017 that only has data for three masses
+			sam_idx = np.linspace(1, 11, 6, dtype = int)
+
 
 	# compare sample measurement to bracketing ref gas measurement
 	for i in df_zero_corr.columns:
@@ -313,7 +335,16 @@ def read_Nu_data(data_file, file_number, current_sample, folder_name, run_type):
 	        # df_zero_corr[i][j-1] is the previous ref side
 	        # df_zero_corr[i][j+1] is the following ref side
 
-	        lil_del.append(((((df_zero_corr[i][j]/df_zero_corr[i][j-1]) + (df_zero_corr[i][j]/df_zero_corr[i][j+1]))/2.)-1)*1000)
+	        if file_number < 2662 and run_type == 'standard':
+
+	        	if i == 'm44' or i == 'm45_44' or i == 'm46_44':
+	        		lil_del.append(((((df_zero_corr[i][j]/df_zero_corr[i][j-1]) + (df_zero_corr[i][j]/df_zero_corr[i][j+1]))/2.)-1)*1000)
+	        	else:
+	        		lil_del.append(0)
+
+	        else:
+
+	        	lil_del.append(((((df_zero_corr[i][j]/df_zero_corr[i][j-1]) + (df_zero_corr[i][j]/df_zero_corr[i][j+1]))/2.)-1)*1000)
 
 	# Define each little delta value by index position
 	if run_type == 'clumped':	
@@ -409,15 +440,31 @@ def read_Nu_data(data_file, file_number, current_sample, folder_name, run_type):
 				init_beam = float(df_results_summ['Initial_Sam Beam'][curr_row])
 				balance = float(df_results_summ['Balance_%'][curr_row])
 				vial_loc = float(df_results_summ['Vial_Location'][curr_row])
-				d13C_SE = float(df_results_summ['Std_Err.5'][curr_row])
-				d18O_SE = float(df_results_summ['Std_Err.6'][curr_row])
-				D47_SE = float(df_results_summ['Std_Err.7'][curr_row])
+				try:
+					d13C_SE = float(df_results_summ['Std_Err.5'][curr_row])
+					d18O_SE = float(df_results_summ['Std_Err.6'][curr_row])
+					D47_SE = float(df_results_summ['Std_Err.7'][curr_row])
+				except(KeyError):
+					# Unexpected formatting 
+					d13C_SE = np.nan
+					d18O_SE = np.nan
+					D47_SE = np.nan
+
 
 				if nu_file_version == 14: # at data file 14, batch summary output changed (added SE to d45, etc.)
 
 					d13C_SE = float(df_results_summ['Std_Err.15'][curr_row])
 					d18O_SE = float(df_results_summ['Std_Err.16'][curr_row])
 					D47_SE = float(df_results_summ['Std_Err.17'][curr_row])
+
+				if int(session) < 20170726 and run_type == 'standard': 
+					d13C_SE = float(df_results_summ['Std_Err.2'][curr_row])
+					d18O_SE = float(df_results_summ['Std_Err.3'][curr_row])
+					D47_SE = np.nan
+
+
+
+
 
 				batch_data_list = [file_number, time, transduc_press, samp_weight, NuCarb_temp, pumpover, init_beam, balance, vial_loc, d13C_SE, d18O_SE, D47_SE, d47_pre_SE, d47_post_SE, bad_count]
 
@@ -509,6 +556,7 @@ def run_D47crunch(run_type, raw_deltas_file):
 	Nominal_D47 = df_anc.to_dict()['D47'] # Sets anchor values for D47crunch as dictionary {Anchor: value}
 	
 	data = D47crunch.D47data()
+
 	data.d13C_STANDARDIZATION_METHOD = '1pt'
 	data.d18O_STANDARDIZATION_METHOD = '1pt'
 	data.Nominal_D47 = Nominal_D47
@@ -544,23 +592,8 @@ def run_D47crunch(run_type, raw_deltas_file):
 	
 	if run_type == 'clumped':
 
-		# do all of above for D48
-		# D47CRUNCH SETS D48 VALUES BASED ON FIEBIG 2021; don't actually need new column in
-		data_48 = D47crunch.D48data()
-		data_48.ALPHA_18O_ACID_REACTION = calc_a18O 
-		data_48.SAMPLE_CONSTRAINING_WG_COMPOSITION = ('ETH-3', 1.71, -1.78)
-		data_48.read(raw_deltas_file) # INPUT	
-		data_48.wg()
-		data_48.crunch()
-
-
 		data.standardize()
-		data_48.standardize()
-
 		repeatability_all = data.repeatability['r_D47']
-		repeatability_D48 = data_48.repeatability['r_D48']
-
-		print(f'D48 repeatability = {repeatability_D48*1000} ppm')
 
 		rpt_d13C = data.repeatability['r_d13C_VPDB']
 		rpt_d18O = data.repeatability['r_d18O_VSMOW']
@@ -569,35 +602,84 @@ def run_D47crunch(run_type, raw_deltas_file):
 		data.table_of_sessions(verbose = True, print_out = True, dir = results_path, filename = f'sessions_{proj}.csv', save_to_file = True)
 		
 		sam = data.table_of_samples(verbose = True, print_out = True, save_to_file = False, output = 'raw')
-		sam_48 = data_48.table_of_samples(verbose = True, print_out = False, dir = results_path, filename = f'D48_sample_{proj}.csv', save_to_file = False, output = 'raw')
-
+		
 		analy = data.table_of_analyses(print_out = False, save_to_file = False, output = 'raw')
-		analy_48 = data_48.table_of_analyses(print_out = False, save_to_file = False, output = 'raw')
+		
 		#data.plot_sessions(dir = Path.cwd() / 'plots' / 'session_plots') # Issue on everyones computer but Noah's...
 
 		# send sample and analyses to pandas dataframe, clean up
 		df_sam = pd.DataFrame(sam[1:], columns = sam[0]).replace(r'^\s*$', np.nan, regex=True)  #import as dataframe, replace empty strings with NaN
+
 		df_sam['95% CL'] = df_sam['95% CL'].str[2:] # clean up plus/minus signs
 
-		df_sam_48 = pd.DataFrame(sam_48[1:], columns = sam_48[0]) #import as dataframe, replace empty strings with NaN
-		df_sam_48 = df_sam_48.drop(labels = ['N', 'd13C_VPDB', 'd18O_VSMOW', 'SE', '95% CL', 'SD', 'p_Levene'], axis = 1)
 
-		df_analy_48 = pd.DataFrame(analy_48[1:], columns = analy_48[0]) #import as dataframe, replace empty strings with NaN
-		df_analy_48 = df_analy_48.drop(labels = ['Session', 'Sample', 'd13Cwg_VPDB', 'd18Owg_VSMOW', 'd45', 'd46',
-       'd47', 'd48', 'd49', 'd13C_VPDB', 'd18O_VSMOW', 'D47raw', 'D48raw', 'D49raw',], axis = 1)
+		D48_date_threshold = 20230815
 
-		# merge 47 df with D48 column from df 48 (on Sample)
-		df_sam = pd.merge(df_sam, df_sam_48, on = 'Sample')
-		df_sam = df_sam.astype({'Sample':'str', 'N':'int32', 'd13C_VPDB':'float64', 'd18O_VSMOW':'float64', 'D47':'float64','SE':'float64', 
-						'95% CL':'float64', 'SD':'float64', 'p_Levene':'float64', 'D48': 'float64'}) #recast types appropriately (all str by default)
-		df_sam = df_sam.rename(columns = {'95% CL': 'CL_95_pct'})
+		# do all of above for D48
+		# D47CRUNCH SETS D48 VALUES BASED ON FIEBIG 2021; don't actually need new column in
 
-		df_analy = pd.DataFrame(analy[1:], columns = analy[0]).replace(r'^\s*$', np.nan, regex=True)  #import as dataframe, replace empty strings with NaN
-		df_analy = pd.merge(df_analy, df_analy_48, on = 'UID')
-		df_analy = df_analy.astype({'UID':'int32', 'Session':'int32', 'Sample':'str', 'd13Cwg_VPDB':'float64', 
-			'd18Owg_VSMOW':'float64', 'd45':'float64', 'd46':'float64', 'd47':'float64', 'd48':'float64', 
-			'd49':'float64', 'd13C_VPDB':'float64', 'd18O_VSMOW':'float64', 'D47raw':'float64', 'D48raw':'float64',
-       		'D49raw':'float64', 'D47':'float64', 'D48':'float64'}) #recast types appropriately (all str by default)
+		df_rdf = pd.read_csv(raw_deltas_file, index_col=False).sort_values(by = 'Session')
+
+
+		if df_rdf['Session'].values[-1] > D48_date_threshold: # if there is any D48 data since new collector (sorted by session, so last one is newest)
+
+			data_48 = D47crunch.D48data()
+			
+			data_48.ALPHA_18O_ACID_REACTION = calc_a18O 
+			data_48.SAMPLE_CONSTRAINING_WG_COMPOSITION = ('ETH-3', 1.71, -1.78)
+
+			# remove D48 data that comes in before new collector install; save to csv
+			df_rdf = df_rdf[df_rdf['Session'] > D48_date_threshold]
+			df_rdf.to_csv('results/raw_deltas_file_48.csv')
+			data_48.read(Path.cwd() / 'results' / f'raw_deltas_file_48.csv') # INPUT	
+			data_48.wg()
+			data_48.crunch()
+			data_48.standardize()
+
+			analy_48 = data_48.table_of_analyses(print_out = False, save_to_file = False, output = 'raw')
+			sam_48 = data_48.table_of_samples(verbose = True, print_out = False, dir = results_path, filename = f'D48_sample_{proj}.csv', save_to_file = False, output = 'raw')
+
+			repeatability_D48 = data_48.repeatability['r_D48']
+
+
+			df_sam_48 = pd.DataFrame(sam_48[1:], columns = sam_48[0]).replace(r'^\s*$', np.nan, regex=True) #import as dataframe, replace empty strings with NaN
+			df_sam_48['95% CL'] = df_sam_48['95% CL'].str[2:] # clean up plus/minus signs
+			df_sam_48 = df_sam_48.drop(labels = ['N', 'd13C_VPDB', 'd18O_VSMOW', 'p_Levene'], axis = 1)
+			df_sam_48 = df_sam_48.rename(columns = {'SE': 'D48_SE', '95% CL': 'D48_95_CL', 'SD':'D48_SD'})
+			print(df_sam_48)
+
+			df_analy_48 = pd.DataFrame(analy_48[1:], columns = analy_48[0]) #import as dataframe, replace empty strings with NaN
+			df_analy_48 = df_analy_48.drop(labels = ['Session', 'Sample', 'd13Cwg_VPDB', 'd18Owg_VSMOW', 'd45', 'd46',
+	       'd47', 'd48', 'd49', 'd13C_VPDB', 'd18O_VSMOW', 'D47raw', 'D48raw', 'D49raw',], axis = 1)
+
+
+			# merge 47 df with D48 column from df 48 (on Sample)
+			df_sam = pd.merge(df_sam, df_sam_48, on = 'Sample', how = 'left')
+			df_sam = df_sam.astype({'Sample':'str', 'N':'int32', 'd13C_VPDB':'float64', 'd18O_VSMOW':'float64', 'D47':'float64','SE':'float64', 
+							'95% CL':'float64', 'SD':'float64', 'p_Levene':'float64', 'D48': 'float64', 'D48_SE': 'float64', 'D48_95_CL': 'float64',
+							'D48_SD': 'float64', }) #recast types appropriately (all str by default)
+			df_sam = df_sam.rename(columns = {'95% CL': 'CL_95_pct'})
+
+			df_analy = pd.DataFrame(analy[1:], columns = analy[0]).replace(r'^\s*$', np.nan, regex=True)  #import as dataframe, replace empty strings with NaN
+			df_analy = pd.merge(df_analy, df_analy_48, on = 'UID', how = 'left')
+			df_analy = df_analy.astype({'UID':'int32', 'Session':'int32', 'Sample':'str', 'd13Cwg_VPDB':'float64', 
+				'd18Owg_VSMOW':'float64', 'd45':'float64', 'd46':'float64', 'd47':'float64', 'd48':'float64', 
+				'd49':'float64', 'd13C_VPDB':'float64', 'd18O_VSMOW':'float64', 'D47raw':'float64', 'D48raw':'float64',
+	       		'D49raw':'float64', 'D47':'float64', 'D48':'float64'}) #recast types appropriately (all str by default)
+
+		else:
+
+			df_sam = df_sam.astype({'Sample':'str', 'N':'int32', 'd13C_VPDB':'float64', 'd18O_VSMOW':'float64', 'D47':'float64','SE':'float64', 
+							'95% CL':'float64', 'SD':'float64', 'p_Levene':'float64'}) #recast types appropriately (all str by default)
+			df_sam = df_sam.rename(columns = {'95% CL': 'CL_95_pct'})
+
+			df_analy = pd.DataFrame(analy[1:], columns = analy[0]).replace(r'^\s*$', np.nan, regex=True)  #import as dataframe, replace empty strings with NaN
+			df_analy = df_analy.astype({'UID':'int32', 'Session':'int32', 'Sample':'str', 'd13Cwg_VPDB':'float64', 
+				'd18Owg_VSMOW':'float64', 'd45':'float64', 'd46':'float64', 'd47':'float64', 'd48':'float64', 
+				'd49':'float64', 'd13C_VPDB':'float64', 'd18O_VSMOW':'float64', 'D47raw':'float64', 'D48raw':'float64',
+	       		'D49raw':'float64', 'D47':'float64'}) #recast types appropriately (all str by default)
+
+			repeatability_D48 = np.nan
 
 		df_rmv = pd.read_excel('params.xlsx', 'Remove')
 		manual_rmv = list(df_rmv.UID)
@@ -631,13 +713,13 @@ def run_D47crunch(run_type, raw_deltas_file):
 		save_path =  Path.cwd() / 'results' / f'rmv_analyses_{proj}.csv'
 		df.to_csv(save_path, index = False)
 
-		return df_sam, df_analy, repeatability_all
+		return df_sam, df_analy, repeatability_all, repeatability_D48
 
 	# If it's a standard run, use Noah's reworking of Mathieu's code
 	elif run_type == 'standard':
 		table_of_analyses_std(data, print_out = False, dir = results_path, save_to_file = True, filename = f'analyses_bulk_{proj}.csv')
 
-		return np.nan, np.nan, np.nan
+		return np.nan, np.nan, np.nan, np.nan
 
 def table_of_analyses_std(data, dir = 'results', filename = f'analyses_{proj}.csv', save_to_file = True, print_out = True):
         '''
@@ -679,7 +761,7 @@ def table_of_analyses_std(data, dir = 'results', filename = f'analyses_{proj}.cs
                	pass
         return out
 
-def add_metadata(dir_path, rptability, batch_data_list, df, df_anal):
+def add_metadata(dir_path, rptability, rptability_48, batch_data_list, df, df_anal):
 	'''
 	PURPOSE: Merges sample metadata from 'Metadata' sheet in params.csv to the output of D47crunch with "Sample" as key;
 	Calculate T, error on T, d18Ow (based on mineralogy)
@@ -718,6 +800,14 @@ def add_metadata(dir_path, rptability, batch_data_list, df, df_anal):
 
 	T_MIT_SE_upper = df['D47'] - df['SE']
 	df['T_MIT_SE_upper'] = round(abs(df['T_MIT'] - T_MIT_SE_upper.map(calc_MIT_temp)), 1)
+
+	df['SE_2'] = df['SE']*2
+
+	T_MIT_2SE_upper = df['D47'] - df['SE_2']
+	df['T_MIT_2SE_upper'] = round(abs(df['T_MIT'] - T_MIT_2SE_upper.map(calc_MIT_temp)), 1)
+
+	T_MIT_2SE_lower = df['D47'] + df['SE_2']
+	df['T_MIT_2SE_lower'] = round(abs(df['T_MIT'] - T_MIT_2SE_lower.map(calc_MIT_temp)), 1)
 
 	# Calc Petersen et al. (2019) temperature
 	df['T_Petersen'] = df['D47'].map(calc_Petersen_temp).astype('float64')
@@ -873,9 +963,17 @@ def add_metadata(dir_path, rptability, batch_data_list, df, df_anal):
 	
 	meta_cols = df_meta.drop(columns = ['Sample']).columns
 
-	col_order_list = ['Sample', 'N', 'mean_pct_carb', 'd13C_VPDB', 'd18O_VPDB_mineral', 'd18Ow_VSMOW', 
-		'd18Ow_VSMOW_lower', 'd18Ow_VSMOW_upper', 'D47', 'SE', 'SD', 'CL_95_pct', 'T_MIT', 
-		'T_MIT_95CL_lower', 'T_MIT_95CL_upper', 'D48']
+	if np.isnan(rptability_48):
+		col_order_list = ['Sample', 'N', 'mean_pct_carb', 'd13C_VPDB', 'd18O_VPDB_mineral', 'd18Ow_VSMOW', 
+			'd18Ow_VSMOW_lower', 'd18Ow_VSMOW_upper', 'D47', 'SE', 'SE_2', 'SD', 'CL_95_pct', 'T_MIT', 'T_MIT_SE_lower',
+			'T_MIT_SE_upper', 'T_MIT_2SE_lower', 'T_MIT_2SE_upper', 'T_MIT_95CL_lower', 'T_MIT_95CL_upper']
+
+	else:
+
+		col_order_list = ['Sample', 'N', 'mean_pct_carb', 'd13C_VPDB', 'd18O_VPDB_mineral', 'd18Ow_VSMOW', 
+			'd18Ow_VSMOW_lower', 'd18Ow_VSMOW_upper', 'D47', 'SE', 'SE_2', 'SD', 'CL_95_pct', 'T_MIT', 'T_MIT_SE_lower',
+			'T_MIT_SE_upper', 'T_MIT_2SE_lower', 'T_MIT_2SE_upper',
+			'T_MIT_95CL_lower', 'T_MIT_95CL_upper', 'D48', 'D48_SE', 'D48_SD', 'D48_95_CL']
 
 	col_order_list.extend(list(meta_cols))
 
@@ -1076,7 +1174,7 @@ def to_earthchem(df_a):
 			df_ec['AFF_d18O'].iloc[i] == 1.009926
 
 		df_ec['Date'].iloc[i] = str(df_a['Time_Collected'].iloc[i])[3:].strip()[:10]
-		df_ec['Time'].iloc[i] = str(df_a['Time_Collected'].iloc[i])[3:].strip()[11:]
+		df_ec['Time'].iloc[i] = str(df_a['Time_Collected'].iloc[i])[3:].strip()[11:19]
 			
 
 
@@ -1351,13 +1449,13 @@ def interactive_plots(df):
 	color_map = bmo.CategoricalColorMapper(factors=df_anchor['Sample'].unique(),
                                    palette=palette)
 
-	f1 = figure(x_axis_label = 'd47',
+	f1 = figure(x_axis_label = 'd47_VPDB',
 				y_axis_label = 'D47',
 				tools = std_tools,
 				tooltips = TOOLTIPS)
 
-	f1.scatter('d47', 'D47', source = data_analyses, color = 'black')
-	f1.scatter('d47', 'D47', source = data_anchors, color = {'field':'Sample', 'transform':color_map})
+	f1.scatter('d47_VPDB', 'D47', source = data_analyses, color = 'black')
+	f1.scatter('d47_VPDB', 'D47', source = data_anchors, color = {'field':'Sample', 'transform':color_map})
 	
 	save(f1)
 
@@ -1444,6 +1542,7 @@ def joy_plot():
 
 def D48_plot(df):
 
+
 	output_file(filename=Path.cwd().parents[0] / 'plots' / f'D48_D47_interactive_{proj}.html', title="D48_D47_interactive")
 
 	df_anchor = df.loc[(df['Sample'] == 'ETH-1') | (df['Sample'] == 'ETH-2') | 
@@ -1488,7 +1587,6 @@ def D48_plot_analy(df):
 
 	output_file(filename=Path.cwd().parents[0] / 'plots' / f'D48_D47_interactive_reps_{proj}.html', title="D48_D47_interactive")
 
-	df = df[df['Session'] > 20230815]
 
 	df_anchor = df.loc[(df['Sample'] == 'ETH-1') | (df['Sample'] == 'ETH-2') | 
 				(df['Sample'] == 'ETH-3') | (df['Sample'] == 'ETH-4') | (df['Sample'] == 'IAEA-C2') 

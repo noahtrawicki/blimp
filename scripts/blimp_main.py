@@ -1,10 +1,11 @@
-# --- VERSION 0.2.1 updated 20240229 by NTA ---
+# --- VERSION 0.2.2 updated 20240528 by NTA ---
 
 
 import os
 import pandas as pd
 from pathlib import Path
 import make_pdf as mk_pdf
+import numpy as np
 
 output_sep = '------------------------'
 
@@ -92,14 +93,15 @@ b_s.fix_names(df_d47)
 print('Run type:', run_type)
 raw_deltas_file = Path.cwd() / 'results' / f'raw_deltas_{proj}.csv'
 
-df_sam, df_analy, rptability = b_s.run_D47crunch(run_type, raw_deltas_file)
+df_sam, df_analy, rptability, rptability_48 = b_s.run_D47crunch(run_type, raw_deltas_file)
 
 if run_type == 'clumped':
 	print('Adding sample metadata...')
 	print(output_sep)
-	b_s.add_metadata(results_path, rptability, batch_data_list, df_sam, df_analy)
+	b_s.add_metadata(results_path, rptability, rptability_48, batch_data_list, df_sam, df_analy)
 	print(output_sep)
-	print('Repeatability for all samples is ', round(rptability, 3)*1000, 'ppm' )
+	print('D47 repeatability for all samples is ', round(rptability, 4)*1000, 'ppm' )
+	print('D48 repeatability for all samples is ', round(rptability_48, 4)*1000, 'ppm' )
 	print(output_sep)
 	print('Data processing complete. Working on plots...')
 	print(output_sep)
@@ -111,8 +113,10 @@ if run_type == 'clumped':
 	b_s.d47_D47_plot(df)
 	b_s.interactive_plots(df)
 	b_s.joy_plot()
-	b_s.D48_plot(df_sam)
-	b_s.D48_plot_analy(df_analy)
+
+	if ~ np.isnan(rptability_48):
+		b_s.D48_plot(df_sam)
+		b_s.D48_plot_analy(df_analy)
 
 elif run_type == 'standard':
 	b_s.add_metadata_std(batch_data_list)
