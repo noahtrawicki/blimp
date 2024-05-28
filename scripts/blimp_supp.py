@@ -803,11 +803,13 @@ def add_metadata(dir_path, rptability, rptability_48, batch_data_list, df, df_an
 
 	df['SE_2'] = df['SE']*2
 
+	T_MIT_2SE_lower = df['D47'] + df['SE_2']
+	df['T_MIT_2SE_lower'] = round(abs(df['T_MIT'] - T_MIT_2SE_lower.map(calc_MIT_temp)), 1)
+
 	T_MIT_2SE_upper = df['D47'] - df['SE_2']
 	df['T_MIT_2SE_upper'] = round(abs(df['T_MIT'] - T_MIT_2SE_upper.map(calc_MIT_temp)), 1)
 
-	T_MIT_2SE_lower = df['D47'] + df['SE_2']
-	df['T_MIT_2SE_lower'] = round(abs(df['T_MIT'] - T_MIT_2SE_lower.map(calc_MIT_temp)), 1)
+
 
 	# Calc Petersen et al. (2019) temperature
 	df['T_Petersen'] = df['D47'].map(calc_Petersen_temp).astype('float64')
@@ -815,6 +817,12 @@ def add_metadata(dir_path, rptability, rptability_48, batch_data_list, df, df_an
 
 	T_MIT_95CL_upper_val = df['T_MIT'] + df['T_MIT_95CL_upper']
 	T_MIT_95CL_lower_val = df['T_MIT'] - df['T_MIT_95CL_lower']
+
+	T_MIT_1SE_upper_val = df['T_MIT'] + df['T_MIT_SE_upper']
+	T_MIT_1SE_lower_val = df['T_MIT'] - df['T_MIT_SE_lower']
+
+	T_MIT_2SE_upper_val = df['T_MIT'] + df['T_MIT_2SE_upper']
+	T_MIT_2SE_lower_val = df['T_MIT'] - df['T_MIT_2SE_lower']
 
 
 	def calc_d18Ow_alpha(alpha):
@@ -840,6 +848,12 @@ def add_metadata(dir_path, rptability, rptability_48, batch_data_list, df, df_an
 	a_A21_H14_upper = make_water(T_MIT_95CL_upper_val,df['Mineralogy'])
 	a_A21_H14_lower = make_water(T_MIT_95CL_lower_val,df['Mineralogy'])
 
+	a_A21_H14_1SE_upper = make_water(T_MIT_1SE_upper_val,df['Mineralogy'])
+	a_A21_H14_1SE_lower = make_water(T_MIT_1SE_lower_val,df['Mineralogy'])
+
+	a_A21_H14_2SE_upper = make_water(T_MIT_2SE_upper_val,df['Mineralogy'])
+	a_A21_H14_2SE_lower = make_water(T_MIT_2SE_lower_val,df['Mineralogy'])
+
 	a_MK77 = make_water_MK77(df['T_MIT'])
 	a_MK77_upper = make_water_MK77(T_MIT_95CL_upper_val)
 	a_MK77_lower = make_water_MK77(T_MIT_95CL_lower_val)
@@ -864,6 +878,12 @@ def add_metadata(dir_path, rptability, rptability_48, batch_data_list, df, df_an
 	df['d18Ow_VSMOW'] = round(calc_d18Ow_alpha(a_A21_H14),1)
 	df['d18Ow_VSMOW_upper'] = round(abs(df['d18Ow_VSMOW'] - calc_d18Ow_alpha(a_A21_H14_upper)), 1)
 	df['d18Ow_VSMOW_lower'] = round(abs(df['d18Ow_VSMOW'] - calc_d18Ow_alpha(a_A21_H14_lower)), 1)
+
+	df['d18Ow_VSMOW_1SE_upper'] = round(abs(df['d18Ow_VSMOW'] - calc_d18Ow_alpha(a_A21_H14_1SE_upper)), 1)
+	df['d18Ow_VSMOW_1SE_lower'] = round(abs(df['d18Ow_VSMOW'] - calc_d18Ow_alpha(a_A21_H14_1SE_lower)), 1)
+
+	df['d18Ow_VSMOW_2SE_upper'] = round(abs(df['d18Ow_VSMOW'] - calc_d18Ow_alpha(a_A21_H14_2SE_upper)), 1)
+	df['d18Ow_VSMOW_2SE_lower'] = round(abs(df['d18Ow_VSMOW'] - calc_d18Ow_alpha(a_A21_H14_2SE_lower)), 1)
 
 
 	df['d18Ow_VSMOW_MK77'] = round(calc_d18Ow_alpha(a_MK77),1)
@@ -964,16 +984,18 @@ def add_metadata(dir_path, rptability, rptability_48, batch_data_list, df, df_an
 	meta_cols = df_meta.drop(columns = ['Sample']).columns
 
 	if np.isnan(rptability_48):
-		col_order_list = ['Sample', 'N', 'mean_pct_carb', 'd13C_VPDB', 'd18O_VPDB_mineral', 'd18Ow_VSMOW', 
-			'd18Ow_VSMOW_lower', 'd18Ow_VSMOW_upper', 'D47', 'SE', 'SE_2', 'SD', 'CL_95_pct', 'T_MIT', 'T_MIT_SE_lower',
-			'T_MIT_SE_upper', 'T_MIT_2SE_lower', 'T_MIT_2SE_upper', 'T_MIT_95CL_lower', 'T_MIT_95CL_upper']
+		col_order_list = ['Sample', 'N', 'mean_pct_carb', 'd13C_VPDB', 'd18O_VPDB_mineral', 'd18Ow_VSMOW', 'd18Ow_VSMOW_1SE_lower', 
+						'd18Ow_VSMOW_1SE_upper', 'd18Ow_VSMOW_2SE_lower', 'd18Ow_VSMOW_2SE_upper',
+						'd18Ow_VSMOW_lower', 'd18Ow_VSMOW_upper', 'D47', 'SE', 'SE_2', 'SD', 'CL_95_pct', 'T_MIT', 'T_MIT_SE_lower',
+						'T_MIT_SE_upper', 'T_MIT_2SE_lower', 'T_MIT_2SE_upper', 'T_MIT_95CL_lower', 'T_MIT_95CL_upper']
 
 	else:
 
-		col_order_list = ['Sample', 'N', 'mean_pct_carb', 'd13C_VPDB', 'd18O_VPDB_mineral', 'd18Ow_VSMOW', 
-			'd18Ow_VSMOW_lower', 'd18Ow_VSMOW_upper', 'D47', 'SE', 'SE_2', 'SD', 'CL_95_pct', 'T_MIT', 'T_MIT_SE_lower',
-			'T_MIT_SE_upper', 'T_MIT_2SE_lower', 'T_MIT_2SE_upper',
-			'T_MIT_95CL_lower', 'T_MIT_95CL_upper', 'D48', 'D48_SE', 'D48_SD', 'D48_95_CL']
+		col_order_list = ['Sample', 'N', 'mean_pct_carb', 'd13C_VPDB', 'd18O_VPDB_mineral', 'd18Ow_VSMOW', 'd18Ow_VSMOW_1SE_lower', 
+						'd18Ow_VSMOW_1SE_upper', 'd18Ow_VSMOW_2SE_lower', 'd18Ow_VSMOW_2SE_upper', 'd18Ow_VSMOW_lower', 
+						'd18Ow_VSMOW_upper', 'D47', 'SE', 'SE_2', 'SD', 'CL_95_pct', 'T_MIT', 'T_MIT_SE_lower',
+						'T_MIT_SE_upper', 'T_MIT_2SE_lower', 'T_MIT_2SE_upper', 'T_MIT_95CL_lower', 'T_MIT_95CL_upper', 
+						'D48', 'D48_SE', 'D48_SD', 'D48_95_CL']
 
 	col_order_list.extend(list(meta_cols))
 
