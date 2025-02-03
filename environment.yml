@@ -3,17 +3,17 @@ channels:
   - defaults
   - conda-forge
 dependencies:
-  - python>3.8
-  - pip
-  - openpyxl
-  - numpy
-  - scipy
-  - pathlib
-  - matplotlib
-  - seaborn
-  - bokeh
-  - pandas
-  - mscorefonts
+  - python 3.11.3
+  - pip 23.0.1
+  - openpyxl 3.0.10
+  - numpy 1.24.3
+  - scipy 1.10.1
+  - pathlib 1.0.1
+  - matplotlib 3.7.1
+  - seaborn 0.12.2
+  - bokeh 3.1.1
+  - pandas 1.5.3
+  - mscorefonts 0.0.1
   - pip:
     - D47crunch==2.0.3
 prefix: C:\Users\noaha\miniconda3\envs\blimp-env
